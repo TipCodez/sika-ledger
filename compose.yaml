@@ -1,0 +1,19 @@
+services:
+  web:
+    build: .
+    ports: ["127.0.0.1:8000:8000"]
+    env_file: .env
+    environment:
+      DATABASE_URL: sqlite:////data/sika.db
+      RUN_BACKGROUND_WORKER: "false"
+    volumes: ["ledger-data:/data"]
+  reminders:
+    build: .
+    command: ["python", "-m", "app.worker", "--loop"]
+    env_file: .env
+    environment:
+      DATABASE_URL: sqlite:////data/sika.db
+      RUN_BACKGROUND_WORKER: "false"
+    volumes: ["ledger-data:/data"]
+volumes:
+  ledger-data:

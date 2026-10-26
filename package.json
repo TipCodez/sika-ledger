@@ -1,0 +1,14 @@
+{
+  "name": "sika-ledger-prototype",
+  "version": "0.2.0",
+  "private": true,
+  "description": "FastAPI mobile web prototype. No Node dependencies or frontend build required.",
+  "scripts": {
+    "dev": ".venv/bin/python dev_server.py",
+    "check": "node --check app/static/app.js",
+    "test:ui": "node tests/ui_workflows.cjs"
+  },
+  "devDependencies": {
+    "jsdom": "30.1.3"
+  }
+}
