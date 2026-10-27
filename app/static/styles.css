@@ -17,6 +17,43 @@
   gap: 12px;
   margin-top: 18px;
 }
+.report-range {
+  padding: 18px;
+  margin-bottom: 20px;
+  align-items: flex-end;
+}
+.report-range .field {
+  margin: 0;
+}
+@media print {
+  .sidebar,
+  .topbar,
+  dialog,
+  #toast,
+  .page-head .button-row,
+  .report-range {
+    display: none !important;
+  }
+  .shell {
+    display: block;
+  }
+  .content {
+    padding: 0;
+    max-width: none;
+  }
+  body {
+    background: white;
+    color: black;
+  }
+  .panel,
+  .stat {
+    break-inside: avoid;
+    box-shadow: none;
+  }
+  .stats {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
 .chat-history {
   max-height: 350px;
   overflow: auto;
@@ -157,6 +194,8 @@ h3 {
   grid-template-columns: 235px 1fr;
 }
 .sidebar {
+  overflow-y: auto;
+  overscroll-behavior: contain;
   position: sticky;
   top: 0;
   height: 100vh;
@@ -165,6 +204,9 @@ h3 {
   background: #fff;
   display: flex;
   flex-direction: column;
+}
+.sidebar > * {
+  flex-shrink: 0;
 }
 .sidebar .brand {
   padding-left: 8px;
@@ -1307,4 +1349,35 @@ code {
   .breadcrumb > span {
     display: none;
   }
+}
+
+.form-panel {
+  max-width: 720px;
+  padding: 24px;
+}
+.plan-panel {
+  padding-top: 16px;
+  border-top: 1px solid var(--line, #e0e8e3);
+}
+.instalment-row {
+  align-items: end;
+  padding: 12px 0;
+  border-bottom: 1px solid #e0e8e3;
+}
+.code-block {
+  padding: 14px;
+  background: #f1f5f3;
+  color: #193f31;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.workflow-steps {
+  padding-left: 22px;
+  line-height: 1.8;
+}
+.workflow-steps li {
+  padding: 10px 0;
 }

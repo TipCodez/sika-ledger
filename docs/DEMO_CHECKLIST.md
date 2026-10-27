@@ -43,6 +43,30 @@ the final rehearsal. Do not delete valuable records to make room for samples.
 - [ ] Replace a private link: the old URL stops working and the balance is preserved.
 - [ ] Download an acknowledgement; source and current balance are clear.
 
+## Corrections, recovery and reports
+
+- [ ] Correct a due date with a reason; inspect the saved prior value through the API.
+- [ ] Adjust GH₵500 upward by GH₵50: original sale remains 500, balance becomes 550, collected stays zero.
+- [ ] Cancel a duplicate with no payment history: status is cancelled, not paid, and collected stays zero.
+- [ ] Cancellation is blocked when any payment history or intent exists.
+- [ ] A stale expected balance blocks the correction without changing the ledger.
+- [ ] Payment recovery lists pending debt and savings test intents.
+- [ ] Provider reverify cannot allocate a transaction twice.
+- [ ] An excess-credit review saves an explanation without clearing or refunding credit.
+- [ ] Report dates filter activity while current aging stays current.
+- [ ] Customer statement includes corrections and labelled ledger entries.
+- [ ] Browser printing works at the demonstration's page size.
+
+## Arkesel callback reconciliation
+
+- [ ] Enable callbacks only on a configured HTTPS test deployment and submit a fresh sandbox message.
+- [ ] Callback intake stores known message/status hints without marking delivery.
+- [ ] The worker looks up the saved message through the authenticated provider API.
+- [ ] Validate the actual message-details JSON contract; unsupported shapes stop for review.
+- [ ] A sandbox status is labelled separately from submission and is not handset-delivery evidence.
+- [ ] Settings retry checks status again without submitting another SMS.
+- [ ] Unknown IDs, mismatched recipients and unsupported statuses cannot update the report.
+
 ## Gemini
 
 - [ ] No key: honest unavailable message, manual workflows still work.
@@ -62,7 +86,35 @@ the final rehearsal. Do not delete valuable records to make room for samples.
 - [ ] Contribution increases savings liability without altering trade debt.
 - [ ] Recorded payout reduces savings liability and cannot exceed it.
 - [ ] No automated transfer is claimed by a manual savings entry.
+- [ ] Open the private contribution link without a customer account.
+- [ ] Starting a test contribution leaves savings unchanged; confirmation adds it once.
+- [ ] Refresh/replay confirmation: no duplicate contribution and trade debt is unchanged.
+- [ ] With provider test access, verify contribution purpose/account metadata and webhook replay.
+- [ ] The contribution page shows no saved phone number or merchant login details.
 - [ ] CSV and activity log work.
 - [ ] Automated tests pass on the delivery machine.
 - [ ] Source archive excludes `.env`, databases, sessions and API credentials.
 - [ ] Known untested integrations and limitations are disclosed during the demo.
+
+## Version 0.4 acceptance
+
+- [ ] A savings-only customer appears in Customers.
+- [ ] Open one profile and inspect separate debt/savings totals, payments, disputes and timeline.
+- [ ] Agree instalments that total the current balance; no new financial entry is created.
+- [ ] Record a partial payment and confirm oldest-instalment progress.
+- [ ] Preview a scheduled reminder: instalment amount and total balance are accurate.
+- [ ] Reverse a payment or correct the debt: the schedule needs review and reminders stop.
+- [ ] Replace or cancel an agreement with a reason; history remains available through the API.
+- [ ] Review contact consent with evidence; sandbox queue rejects a contact without permission.
+- [ ] Correct a phone: all old private links fail and debts remain paused for review.
+- [ ] Revoke permission after queueing: no sandbox submission occurs.
+- [ ] Set printable branding and download a repayment PDF and customer PDF statement.
+- [ ] Confirm reversed, manual, simulated and test sources stay explicitly labelled.
+- [ ] Add a collector and sign in separately; permitted repayment/contribution workflows work.
+- [ ] Collector API requests for corrections, payouts, contacts, plans and staff return 403.
+- [ ] Owner audit events identify the collector responsible for a recorded repayment.
+- [ ] Disable/reset collector: their existing session stops working immediately.
+- [ ] Create and inspect a private SQLite backup while the app is running.
+- [ ] Restore is refused until every app/worker connection is closed.
+- [ ] Restore in a rehearsal database; sign in again and verify balances and safety archive.
+- [ ] Review interrupted/queued work after restore; no automatic SMS replay occurs.

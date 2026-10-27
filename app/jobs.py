@@ -23,14 +23,21 @@ def within_hours(settings):
     hour = datetime.now(timezone.utc).hour  # Africa/Accra is UTC+0.
     return settings['reminder_start'] <= hour < settings['reminder_end']
 
+def reminder_fact(debt):
+    plan=debt.get('plan')
+    if plan and plan['status']=='active':
+        amount=sum(i['remaining_minor'] for i in plan['instalments'] if i['due_date']<=today().isoformat()) or plan['next_due_minor']
+        subject=f"GHS {amount/100:,.2f} on your agreed repayment plan is due on {debt['collection_due_date']} (total outstanding GHS {debt['balance_minor']/100:,.2f})"
+    else:subject=f"GHS {debt['balance_minor']/100:,.2f} is due on {debt['due_date']}"
+    return subject
+
 def reminder_body(settings, merchant_name, debt):
-    return (f"Hello {debt['name']}, a friendly reminder from {merchant_name}: "
-            f"GHS {debt['balance_minor']/100:,.2f} is due on {debt['due_date']}. "
+    return (f"Hello {debt['name']}, a friendly reminder from {merchant_name}: {reminder_fact(debt)}. "
             f"Pay all or part: {settings['base_url']}/pay/{debt['public_token']}. "
             f"Incorrect record? Contact {merchant_name}.")
 
 def eligible(debt):
-    return (debt['balance_minor'] > 0 and not any(debt[k] for k in
+    return (debt['balance_minor'] > 0 and not debt.get('plan_review_required',False) and not any(debt[k] for k in
             ('paused','disputed','do_not_contact')))
 
 async def process_webhooks(app, limit=10):
@@ -83,11 +90,13 @@ async def submit_sandbox(settings, number, body):
     if not settings['arkesel_key']:
         return {'status':'failed','error':'Arkesel sandbox key is not configured.'}
     try:
+        payload={'sender':settings['sms_sender'],'message':body,
+            'recipients':[number],'sandbox':True}
+        if settings.get('arkesel_callbacks') and settings['base_url'].startswith('https://'):
+            payload['callback_url']=settings['base_url']+'/api/webhooks/arkesel'
         async with httpx.AsyncClient(timeout=12) as client:
             response=await client.post('https://sms.arkesel.com/api/v2/sms/send',
-                headers={'api-key':settings['arkesel_key']},json={
-                    'sender':settings['sms_sender'],'message':body,
-                    'recipients':[number],'sandbox':True})
+                headers={'api-key':settings['arkesel_key']},json=payload)
         if response.status_code >= 500:
             return {'status':'unknown','error':'Provider server error. Check provider history before retrying.'}
         if response.status_code >= 400:
@@ -134,7 +143,7 @@ async def process_sms(app,limit=10):
             d=owned_debt(conn,job['merchant_id'],job['debt_id'],lock=True)
             conn.execute(select(customers).where(customers.c.id==d['customer_id']).with_for_update()).first()
             d=debt_view(conn,d)
-            if job['day_key']!=today().isoformat() or not eligible(d):
+            if job['day_key']!=today().isoformat() or not eligible(d) or (settings['sms_mode']!='dry_run' and not d['sms_consent']):
                 result={'status':'cancelled','error':'Record became ineligible before dispatch.'}
             else:
                 business=conn.scalar(select(merchants.c.name).where(merchants.c.id==job['merchant_id']))
@@ -154,6 +163,8 @@ async def process_sms(app,limit=10):
 
 async def run_once(app):
     verification=await process_webhooks(app)
+    from .sms_callbacks import process_callbacks
+    delivery_reports=await process_callbacks(app)
     created=0
     if within_hours(app.state.settings):
         with write(app.state.engine) as conn:
@@ -172,7 +183,7 @@ async def run_once(app):
         if ids:
             conn.execute(turns.delete().where(turns.c.conversation_id.in_(ids)))
             conn.execute(conversations.delete().where(conversations.c.id.in_(ids)))
-    return {'webhooks':verification,'previews_created':created,'sms':sms,'real_messages_sent':0}
+    return {'webhooks':verification,'sms_callbacks':delivery_reports,'previews_created':created,'sms':sms,'real_messages_sent':0}
 
 async def worker_loop(app):
     while True:

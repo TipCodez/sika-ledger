@@ -2,8 +2,8 @@
 
 Owner: Raphael. Target: **7 November 2026**, Africa/Accra.
 
-This bundle is a runnable first implementation, not a completed live payment
-operation. Dates below are proposed work milestones, not background jobs or
+This v0.4 bundle implements the prototype workflows; live collection and
+settlement remain outside its scope. Dates below are proposed work milestones, not background jobs or
 promises that unattended work has been scheduled.
 
 | Dates         | Milestone                                           | Evidence required                                                                          |
@@ -27,7 +27,18 @@ promises that unattended work has been scheduled.
 - Gemini structured planner, read tools, debt proposals and explicit confirmation.
 - Scheduled reminder dry runs and Arkesel sandbox adapter, dispute review and wrong-number suppression.
 - Saved Gemini follow-ups, durable verification inbox, link replacement and downloadable acknowledgements.
-- Separate basic susu contribution and payout records; CSV export and action log.
+- Separate susu records, private simulator/Paystack test contribution links, and manual payouts.
+- Audited due-date/amount corrections and cancellation of duplicate unpaid records.
+- Pending-payment recovery and explained unallocated-credit review notes.
+- Collection reports, current aging, customer statements and browser print action.
+- Optional Arkesel callback hints with authenticated provider status lookup, durable jobs and explained retries.
+- Complete customer profiles, including savings-only customers and transaction history.
+- Agreed repayment instalments with ledger-derived progress and plan-aware reminders.
+- Audited contact correction, explicit phone-bound SMS permission and link replacement.
+- Branded PDF statements and repayment/online-contribution acknowledgements.
+- Owner/collector API permissions, immediate session revocation and staff attribution.
+- Operator SQLite backups, validation, offline restore and automatic safety snapshots.
+- CSV export and action log.
 
 ## Evidence still needed for the final demonstration
 
@@ -39,8 +50,15 @@ promises that unattended work has been scheduled.
   the FastAPI process in its browser preview runtime.
 - Actual Arkesel sandbox acceptance with Raphael's key. The adapter is implemented
   and contract-tested with mocks; live handset delivery remains outside this release.
-- A decision on whether automatic susu payment links are required on 7 November.
-  The current savings module records externally completed activity only.
+- Actual Arkesel message-details response compatibility, callback arrival and
+  authenticated lookup using Raphael's account. SMS signature validation is not
+  claimed; unsupported response shapes stop for review.
+- Susu test checkout, provider return and webhook replay against the actual test
+  account; existing financial invariants are covered locally with mocks.
+- Visual review of reports/print output and all new screens on the target browser.
+- Windows launcher, Windows maintenance locking and backup/restore rehearsal.
+- Owner/collector workflow rehearsal with two people and an actual backup location.
+- PostgreSQL backup/recovery through the selected host, if PostgreSQL is selected.
 
 ## Acceptance scenario
 

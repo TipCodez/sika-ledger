@@ -24,11 +24,13 @@ from sqlalchemy import select, func, and_
 from sqlalchemy.exc import IntegrityError
 from .db import (make_engine, write, merchants, sessions, customers, debts, entries,
     payments, disputes, outbox, audit, susu, contributions, proposals,
-    webhook_inbox, sms_attempts, conversations, turns)
+    webhook_inbox, sms_attempts, conversations, turns,
+    susu_links,susu_payments,sms_callback_inbox,sms_reports,debt_flags,staff,session_actors,audit_actors)
 from .domain import (uid, now, today, money, phone, password_hash, password_ok,
     log, balance, create_debt, owned_debt, debt_view, confirm_payment,
     reverse_payment, customer_get_or_create, invalidate_previews)
 from . import agent
+from . import savings
 
 load_dotenv()
 STATIC = Path(__file__).parent/'static'
@@ -113,6 +115,7 @@ def create_app(database_url=None, overrides=None):
         'sms_mode':os.getenv('SMS_MODE','dry_run'),
         'arkesel_key':os.getenv('ARKESEL_API_KEY',''),
         'sms_sender':os.getenv('SMS_SENDER_ID','SikaLedger'),
+        'arkesel_callbacks':os.getenv('ARKESEL_CALLBACKS_ENABLED','false').lower()=='true',
         'automatic_reminders':os.getenv('AUTOMATIC_REMINDERS','false').lower()=='true',
         'worker_enabled':os.getenv('RUN_BACKGROUND_WORKER','false').lower()=='true'}
     settings.update(overrides or {})
@@ -123,6 +126,8 @@ def create_app(database_url=None, overrides=None):
     if settings['paystack_key'] and not settings['paystack_key'].startswith('sk_test_'):
         raise RuntimeError('This prototype accepts Paystack TEST keys only; live payment keys are blocked.')
     engine = make_engine(settings['database_url'])
+    from .access import bootstrap_owners,identity,authorize,actor_context
+    bootstrap_owners(engine)
     @asynccontextmanager
     async def lifespan(app):
         from .jobs import worker_loop
@@ -133,7 +138,7 @@ def create_app(database_url=None, overrides=None):
             try:await task
             except asyncio.CancelledError:pass
         engine.dispose()
-    app = FastAPI(title='Sika Ledger Prototype',version='0.2.0',lifespan=lifespan)
+    app = FastAPI(title='Sika Ledger Prototype',version='0.4.0',lifespan=lifespan)
     app.state.engine=engine
     app.state.settings=settings
     buckets=defaultdict(deque)
@@ -142,7 +147,7 @@ def create_app(database_url=None, overrides=None):
     @app.middleware('http')
     async def boundaries(request, call_next):
         # Same-origin browser mutations; webhooks use their cryptographic signature.
-        if request.method not in ('GET','HEAD','OPTIONS') and request.url.path!='/api/webhooks/paystack':
+        if request.method not in ('GET','HEAD','OPTIONS') and request.url.path not in ('/api/webhooks/paystack','/api/webhooks/arkesel'):
             origin=request.headers.get('origin')
             if origin and origin!=settings['base_url']:
                 return Response('Cross-origin request rejected',status_code=403)
@@ -158,7 +163,12 @@ def create_app(database_url=None, overrides=None):
                 while q and t-q[0]>60:q.popleft()
                 if len(q)>=limit:return Response('Rate limit exceeded',status_code=429)
                 q.append(t)
-        response=await call_next(request)
+        person=identity(engine,request.cookies.get('sika_session',''))
+        request.state.identity=person
+        is_public=request.url.path.startswith(('/api/public/','/api/susu-public/','/api/webhooks/'))
+        context_token=actor_context.set(None if is_public else person)
+        try:response=await call_next(request)
+        finally:actor_context.reset(context_token)
         response.headers['X-Content-Type-Options']='nosniff'
         response.headers['Referrer-Policy']='no-referrer'
         response.headers['X-Frame-Options']='DENY'
@@ -172,18 +182,16 @@ def create_app(database_url=None, overrides=None):
         return JSONResponse({'detail':'A conflicting record already exists. Reload and check your previous submission.'},status_code=409)
 
     def current(request:Request):
-        token=request.cookies.get('sika_session','')
-        digest=hashlib.sha256(token.encode()).hexdigest()
-        with engine.connect() as conn:
-            row=conn.execute(select(merchants).join(sessions,sessions.c.merchant_id==merchants.c.id)
-                .where(sessions.c.token_hash==digest,sessions.c.expires_at>now())).mappings().first()
-        if not row:raise HTTPException(401,'Sign in to continue.')
-        return dict(row)
+        person=request.state.identity
+        if not person:raise HTTPException(401,'Sign in to continue.')
+        authorize(request,person)
+        return person
 
-    def establish(conn,merchant,response):
-        token=secrets.token_urlsafe(40)
-        conn.execute(sessions.insert().values(token_hash=hashlib.sha256(token.encode()).hexdigest(),
-            merchant_id=merchant,expires_at=(datetime.now(timezone.utc)+timedelta(hours=12)).isoformat()))
+    def establish(conn,merchant,response,actor_id=None):
+        token=secrets.token_urlsafe(40);digest=hashlib.sha256(token.encode()).hexdigest()
+        conn.execute(sessions.insert().values(token_hash=digest,merchant_id=merchant,
+            expires_at=(datetime.now(timezone.utc)+timedelta(hours=12)).isoformat()))
+        conn.execute(session_actors.insert().values(token_hash=digest,actor_id=actor_id or merchant))
         response.set_cookie('sika_session',token,httponly=True,secure=settings['secure_cookie'],
                             samesite='strict',max_age=43200,path='/')
 
@@ -223,7 +231,7 @@ def create_app(database_url=None, overrides=None):
     def overview(conn,merchant):
         ds=all_debts(conn,merchant)
         return {'outstanding_minor':sum(d['balance_minor'] for d in ds),
-            'overdue_minor':sum(d['balance_minor'] for d in ds if d['status']=='overdue'),
+            'overdue_minor':sum(d['overdue_minor'] for d in ds),
             'collected_minor':sum(d['paid_minor'] for d in ds),
             'open_debts':sum(d['balance_minor']>0 for d in ds),
             'customers':conn.scalar(select(func.count()).select_from(customers).where(customers.c.merchant_id==merchant)),
@@ -231,13 +239,14 @@ def create_app(database_url=None, overrides=None):
                 .where(payments.c.merchant_id==merchant,payments.c.status=='confirmed'))}
 
     @app.get('/api/health')
-    def health():return {'status':'ok','version':'0.2.0','prototype':True}
+    def health():return {'status':'ok','version':'0.4.0','prototype':True}
 
     @app.get('/api/config')
     def config():return {'demo_mode':settings['demo'],'gemini_configured':bool(settings['gemini_key']),
         'gemini_model':settings['gemini_model'],'paystack_test_configured':bool(settings['paystack_key'] and settings['paystack_email']),
         'sms_mode':settings['sms_mode'],'sms_configured':bool(settings['arkesel_key']),
         'background_worker':settings['worker_enabled'],'automatic_reminders':settings['automatic_reminders'],
+        'arkesel_callbacks':settings['arkesel_callbacks'],
         'payment_mode':'test_only'}
 
     @app.post('/api/auth/register')
@@ -249,29 +258,34 @@ def create_app(database_url=None, overrides=None):
         with write(engine) as conn:
             conn.execute(merchants.insert().values(id=mid,name=data.name.strip(),login=login,
                 password_hash=hashed,created_at=now()))
+            conn.execute(staff.insert().values(id=mid,merchant_id=mid,name=data.name.strip(),login=login,
+                password_hash=hashed,role='owner',active=1,created_at=now()))
             log(conn,mid,'merchant.registered',mid)
             establish(conn,mid,response)
-        return {'id':mid,'name':data.name.strip(),'login':login}
+        return {'id':mid,'name':data.name.strip(),'login':login,'actor_id':mid,'actor_name':data.name.strip(),'role':'owner'}
 
     @app.post('/api/auth/login')
     def login(data:Login,response:Response):
         with write(engine) as conn:
-            row=conn.execute(select(merchants).where(merchants.c.login==data.login.strip().lower())).mappings().first()
+            row=conn.execute(select(staff).where(staff.c.login==data.login.strip().lower(),staff.c.active==1)).mappings().first()
             if not row or not password_ok(data.password,row['password_hash']):
                 raise HTTPException(401,'Incorrect login or password.')
-            establish(conn,row['id'],response)
-            return {'id':row['id'],'name':row['name'],'login':row['login']}
+            establish(conn,row['merchant_id'],response,row['id'])
+            name=conn.scalar(select(merchants.c.name).where(merchants.c.id==row['merchant_id']))
+            return {'id':row['merchant_id'],'name':name,'login':row['login'],'actor_id':row['id'],'actor_name':row['name'],'role':row['role']}
 
     @app.post('/api/auth/logout')
     def logout(request:Request,response:Response):
         token=request.cookies.get('sika_session','')
         with write(engine) as conn:
-            conn.execute(sessions.delete().where(sessions.c.token_hash==hashlib.sha256(token.encode()).hexdigest()))
+            digest=hashlib.sha256(token.encode()).hexdigest()
+            conn.execute(session_actors.delete().where(session_actors.c.token_hash==digest))
+            conn.execute(sessions.delete().where(sessions.c.token_hash==digest))
         response.delete_cookie('sika_session',path='/')
         return {'ok':True}
 
     @app.get('/api/me')
-    def me(m=Depends(current)):return {k:m[k] for k in ('id','name','login')}
+    def me(m=Depends(current)):return {k:m[k] for k in ('id','name','login','actor_id','actor_name','role')}
 
     @app.get('/api/dashboard')
     def dashboard(m=Depends(current)):
@@ -419,6 +433,8 @@ def create_app(database_url=None, overrides=None):
                 return {'reference':ref,'mode':data.mode,'status':prior['status'],'retry_verify':True,
                         'authorization_url':prior['checkout_url'] if prior['status']=='pending' else None}
             if d['disputed']:raise HTTPException(409,'This balance is under review. Contact the business before paying.')
+            if conn.scalar(select(debt_flags.c.debt_id).where(debt_flags.c.debt_id==d['id'])):
+                raise HTTPException(409,'This debt was cancelled.')
             if amount>balance(conn,d['id']):raise HTTPException(422,'Amount exceeds the outstanding balance.')
             conn.execute(payments.insert().values(id=uid(),merchant_id=d['merchant_id'],debt_id=d['id'],
                 reference=ref,amount_minor=amount,applied_minor=0,unallocated_minor=0,
@@ -468,18 +484,26 @@ def create_app(database_url=None, overrides=None):
             raise HTTPException(502,'Provider verification unavailable. Balance remains unchanged; retry verification later.')
         with write(engine) as conn:
             p=conn.execute(select(payments).where(payments.c.reference==reference)).mappings().first()
+            is_savings=False
+            if not p:
+                p=conn.execute(select(susu_payments).where(susu_payments.c.reference==reference)).mappings().first()
+                is_savings=True
             if not p:raise HTTPException(404,'Unknown payment reference.')
             if p['source']!='paystack_test':raise HTTPException(409,'Incorrect payment source.')
             metadata=verified.get('metadata') or {}
             if isinstance(metadata,str):
                 try:metadata=json.loads(metadata)
                 except ValueError:metadata={}
+            target_matches=(isinstance(metadata,dict) and metadata.get('merchant_id')==p['merchant_id'])
+            if target_matches:
+                target_matches=(metadata.get('purpose')=='susu_contribution' and metadata.get('account_id')==p['account_id']
+                    if is_savings else metadata.get('debt_id')==p['debt_id'])
             if (verified.get('reference')!=reference or verified.get('amount')!=p['amount_minor']
                 or verified.get('currency')!='GHS' or verified.get('domain')!='test'
-                or not isinstance(metadata,dict) or metadata.get('debt_id')!=p['debt_id']
-                or metadata.get('merchant_id')!=p['merchant_id']):
+                or not target_matches):
                 raise HTTPException(409,'Provider transaction does not match the expected test payment.')
             if verified.get('status')!='success':return {'status':verified.get('status','pending'),'balance_unchanged':True}
+            if is_savings:return savings.confirm_contribution(conn,reference)
             return confirm_payment(conn,reference,'Paystack server-verified TEST payment. No real money moved.')
 
     app.state.verify_paystack=verify_paystack
@@ -514,6 +538,9 @@ def create_app(database_url=None, overrides=None):
         with write(engine) as conn:
             p=conn.execute(select(payments).where(payments.c.reference==ref,
                 payments.c.source=='paystack_test').with_for_update()).mappings().first()
+            if not p:
+                p=conn.execute(select(susu_payments).where(susu_payments.c.reference==ref,
+                    susu_payments.c.source=='paystack_test').with_for_update()).mappings().first()
             if not p:return {'received':True,'ignored':True}
             key='charge.success:'+ref
             existing=conn.execute(select(webhook_inbox).where(webhook_inbox.c.event_key==key)).mappings().first()
@@ -548,14 +575,15 @@ def create_app(database_url=None, overrides=None):
         made=0
         # Preview only. A production sender must recheck balance/opt-out just before dispatch.
         for d in all_debts(conn,merchant):
-            days=(current_day-date.fromisoformat(d['due_date'])).days
+            days=(current_day-date.fromisoformat(d['collection_due_date'])).days
             eligible=days in (-1,0) or (days>0 and days%3==0)
-            if not eligible or d['balance_minor']==0 or d['paused'] or d['disputed'] or d['do_not_contact']:continue
+            if not eligible or d['balance_minor']==0 or d['paused'] or d['disputed'] or d['do_not_contact'] or d['plan_review_required']:continue
             day=current_day.isoformat()
             existing=conn.execute(select(outbox).where(outbox.c.debt_id==d['id'],outbox.c.day_key==day)).mappings().first()
             if existing and existing['status']!='stale':continue
             business=conn.scalar(select(merchants.c.name).where(merchants.c.id==merchant))
-            body=f"Hello {d['name']}, a friendly reminder from {business}: GHS {d['balance_minor']/100:,.2f} is due on {d['due_date']}. Pay all or part: {settings['base_url']}/pay/{d['public_token']}. Incorrect record? Contact {business}."
+            from .jobs import reminder_body
+            body=reminder_body(settings,business,d)
             if existing:conn.execute(outbox.update().where(outbox.c.id==existing['id']).values(body=body,status='preview',created_at=now()))
             else:conn.execute(outbox.insert().values(id=uid(),merchant_id=merchant,debt_id=d['id'],day_key=day,body=body,status='preview',created_at=now()))
             made+=1
@@ -575,8 +603,42 @@ def create_app(database_url=None, overrides=None):
                 item=dict(r)
                 item['attempts']=[dict(a) for a in conn.execute(select(sms_attempts).where(
                     sms_attempts.c.outbox_id==r['id']).order_by(sms_attempts.c.started_at.desc())).mappings()]
+                for attempt in item['attempts']:
+                    report=conn.execute(select(sms_reports).where(sms_reports.c.attempt_id==attempt['id'])).mappings().first()
+                    attempt['delivery_report']=dict(report) if report else None
                 rows.append(item)
             return rows
+
+    @app.api_route('/api/webhooks/arkesel',methods=['GET','POST'])
+    async def arkesel_callback(request:Request):
+        if not settings['arkesel_callbacks']:raise HTTPException(503,'Arkesel callback intake is disabled.')
+        if len(await request.body())>16384:raise HTTPException(413,'Payload too large.')
+        ids=request.query_params.getlist('sms_id');statuses=request.query_params.getlist('status')
+        import re
+        if len(ids)!=1 or len(statuses)!=1 or not re.fullmatch(r'[A-Za-z0-9_-]{1,128}',ids[0]):
+            raise HTTPException(400,'Expected one valid sms_id and one status query parameter.')
+        from .sms_callbacks import receive
+        # Public intake is intentionally untrusted. Only an authenticated provider
+        # lookup may update the separately stored delivery report.
+        with write(engine) as conn:return receive(conn,ids[0],statuses[0])
+
+    @app.get('/api/integrations/sms-callbacks')
+    def sms_callback_jobs(m=Depends(current)):
+        with engine.connect() as conn:
+            return [dict(r) for r in conn.execute(select(sms_callback_inbox).where(
+                sms_callback_inbox.c.merchant_id==m['id']).order_by(sms_callback_inbox.c.created_at.desc()).limit(100)).mappings()]
+
+    @app.post('/api/integrations/sms-callbacks/{jid}/retry')
+    def retry_sms_callback(jid:str,data:Reason,m=Depends(current)):
+        with write(engine) as conn:
+            row=conn.execute(select(sms_callback_inbox).where(sms_callback_inbox.c.id==jid,
+                sms_callback_inbox.c.merchant_id==m['id']).with_for_update()).mappings().first()
+            if not row:raise HTTPException(404,'SMS status job not found.')
+            if row['status'] not in ('needs_review','retry','processed'):raise HTTPException(409,'This status job is not available for retry.')
+            conn.execute(sms_callback_inbox.update().where(sms_callback_inbox.c.id==jid).values(
+                status='pending',attempts=0,locked_until=None,next_attempt_at=now(),last_error=None,processed_at=None))
+            log(conn,m['id'],'sms.callback_retry_requested',jid,data.reason)
+        return {'queued':True,'note':'Status lookup only; no SMS will be resent.'}
 
     @app.post('/api/reminders/{rid}/queue')
     def queue_reminder(rid:str,m=Depends(current)):
@@ -587,6 +649,7 @@ def create_app(database_url=None, overrides=None):
             if row['status']=='queued':return {'queued':True,'duplicate':True}
             if row['status']!='preview':raise HTTPException(409,'Only a fresh preview can be queued. Unknown outcomes cannot be automatically resent.')
             d=debt_view(conn,owned_debt(conn,m['id'],row['debt_id'],True))
+            if settings['sms_mode']!='dry_run' and not d['sms_consent']:raise HTTPException(409,'Record verified customer SMS permission in the customer profile first.')
             from .jobs import eligible
             if row['day_key']!=today().isoformat() or not eligible(d):
                 raise HTTPException(409,'This reminder is no longer eligible. Refresh your previews.')
@@ -598,7 +661,7 @@ def create_app(database_url=None, overrides=None):
 
     @app.get('/api/audit')
     def audit_list(m=Depends(current)):
-        with engine.connect() as conn:return [dict(x) for x in conn.execute(select(audit).where(audit.c.merchant_id==m['id']).order_by(audit.c.created_at.desc()).limit(200)).mappings()]
+        with engine.connect() as conn:return [dict(x) for x in conn.execute(select(audit,audit_actors.c.name.label('actor_name'),audit_actors.c.role.label('actor_role')).outerjoin(audit_actors,audit_actors.c.audit_id==audit.c.id).where(audit.c.merchant_id==m['id']).order_by(audit.c.created_at.desc()).limit(200)).mappings()]
 
     @app.get('/api/export/debts.csv')
     def export(m=Depends(current)):
@@ -678,7 +741,7 @@ def create_app(database_url=None, overrides=None):
             conn.execute(conversations.update().where(conversations.c.id==cid).values(
                 busy_token=claim,busy_until=(datetime.now(timezone.utc)+timedelta(seconds=60)).isoformat()))
             # Do not send payment tokens or saved phone numbers to the model.
-            context=[{k:d[k] for k in ('id','name','balance_minor','due_date','status')}
+            context=[{k:d[k] for k in ('id','name','balance_minor','due_date','collection_due_date','overdue_minor','status')}
                      for d in all_debts(conn,m['id'])][:100]
         try:
             plan=await agent.gemini_plan(settings,data.message,context,history)
@@ -686,7 +749,7 @@ def create_app(database_url=None, overrides=None):
                 conversation=owned_conversation(conn,m['id'],cid,True)
                 if conversation['busy_token']!=claim:raise HTTPException(409,'Conversation changed while this request was running. Retry.')
                 # Rebuild context from current balances, not an earlier model snapshot.
-                context=[{k:d[k] for k in ('id','name','balance_minor','due_date','status')}
+                context=[{k:d[k] for k in ('id','name','balance_minor','due_date','collection_due_date','overdue_minor','status')}
                          for d in all_debts(conn,m['id'])]
                 result=agent.execute_plan(conn,m['id'],plan,context)
                 result['conversation_id']=cid
@@ -725,10 +788,11 @@ def create_app(database_url=None, overrides=None):
 
     @app.get('/api/susu')
     def susu_list(m=Depends(current)):
-        with engine.connect() as conn:
+        with write(engine) as conn:
             result=[]
             for r in conn.execute(select(susu).where(susu.c.merchant_id==m['id'])).mappings():
                 item=dict(r)
+                item['public_token']=savings.ensure_link(conn,r['id'])
                 item['name']=conn.scalar(select(customers.c.name).where(customers.c.id==r['customer_id']))
                 item['balance_minor']=conn.scalar(select(func.coalesce(func.sum(contributions.c.amount_minor),0)).where(contributions.c.account_id==r['id']))
                 item['entries']=[dict(x) for x in conn.execute(select(contributions).where(contributions.c.account_id==r['id']).order_by(contributions.c.created_at.desc())).mappings()]
@@ -743,11 +807,87 @@ def create_app(database_url=None, overrides=None):
             sid=uid()
             conn.execute(susu.insert().values(id=sid,merchant_id=m['id'],customer_id=cid,label=data.label,
                 daily_target_minor=target,created_at=now()))
+            token=savings.ensure_link(conn,sid)
             log(conn,m['id'],'susu.account_created',sid)
-        return {'id':sid}
+        return {'id':sid,'public_token':token}
+
+    @app.post('/api/susu/{sid}/rotate-link')
+    def rotate_susu_link(sid:str,m=Depends(current)):
+        with write(engine) as conn:
+            savings.owned_account(conn,m['id'],sid,True)
+            savings.ensure_link(conn,sid)
+            token=secrets.token_urlsafe(32)
+            conn.execute(susu_links.update().where(susu_links.c.account_id==sid).values(public_token=token))
+            log(conn,m['id'],'susu.link_rotated',sid)
+        return {'public_token':token}
+
+    @app.get('/api/susu-public/{token}')
+    def contribution_page_data(token:str):
+        with engine.connect() as conn:
+            return savings.public_view(conn,savings.public_account(conn,token))
+
+    @app.post('/api/susu-public/{token}/checkout')
+    async def contribution_checkout(token:str,data:CheckoutIn):
+        amount=money(data.amount)
+        if data.mode=='simulation' and not settings['demo']:raise HTTPException(403,'Simulation is disabled.')
+        if data.mode=='paystack_test' and not(settings['paystack_key'] and settings['paystack_email']):
+            raise HTTPException(503,'Configure the Paystack test key and test email first.')
+        with write(engine) as conn:
+            a=savings.public_account(conn,token,True)
+            ref='sika-susu-'+a['id']+'-'+data.idempotency_key
+            previous=conn.execute(select(susu_payments).where(susu_payments.c.reference==ref)).mappings().first()
+            if previous:
+                if previous['amount_minor']!=amount or previous['source']!=data.mode:
+                    raise HTTPException(409,'Idempotency key was used for different contribution details.')
+                return {'reference':ref,'mode':data.mode,'status':previous['status'],
+                    'authorization_url':previous['checkout_url'] if previous['status']=='pending' else None}
+            conn.execute(susu_payments.insert().values(id=uid(),merchant_id=a['merchant_id'],account_id=a['id'],
+                reference=ref,amount_minor=amount,source=data.mode,status='pending',created_at=now()))
+            log(conn,a['merchant_id'],'susu.checkout_started',a['id'],data.mode)
+        if data.mode=='simulation':return {'reference':ref,'mode':'simulation','status':'pending'}
+        try:
+            async with httpx.AsyncClient(timeout=20) as client:
+                response=await client.post('https://api.paystack.co/transaction/initialize',
+                    headers={'Authorization':'Bearer '+settings['paystack_key']},json={
+                        'reference':ref,'amount':amount,'currency':'GHS','email':settings['paystack_email'],
+                        'channels':['mobile_money'],'metadata':{'purpose':'susu_contribution',
+                            'account_id':a['id'],'merchant_id':a['merchant_id']},
+                        'callback_url':settings['base_url']+'/contribute/'+token})
+            response.raise_for_status();body=response.json()
+            if not body.get('status'):raise ValueError()
+            url=body['data']['authorization_url']
+            if urlparse(url).scheme!='https' or urlparse(url).hostname!='checkout.paystack.com':raise ValueError()
+            with write(engine) as conn:
+                conn.execute(susu_payments.update().where(susu_payments.c.reference==ref).values(checkout_url=url))
+            return {'reference':ref,'mode':data.mode,'status':'pending','authorization_url':url}
+        except (httpx.HTTPError,ValueError,KeyError):
+            with write(engine) as conn:log(conn,a['merchant_id'],'susu.checkout_uncertain',a['id'],ref)
+            raise HTTPException(502,'Test contribution checkout could not be started. Savings balance is unchanged.')
+
+    @app.post('/api/susu-public/{token}/simulate/{reference}')
+    def simulate_contribution(token:str,reference:str):
+        if not settings['demo']:raise HTTPException(403,'Simulation is disabled.')
+        with write(engine) as conn:
+            a=savings.public_account(conn,token,True)
+            p=conn.execute(select(susu_payments).where(susu_payments.c.account_id==a['id'],
+                susu_payments.c.reference==reference,susu_payments.c.source=='simulation')).mappings().first()
+            if not p:raise HTTPException(404,'Simulation reference not found.')
+            return savings.confirm_contribution(conn,reference)
+
+    @app.post('/api/susu-public/{token}/verify/{reference}')
+    async def verify_contribution(token:str,reference:str):
+        with engine.connect() as conn:
+            a=savings.public_account(conn,token)
+            p=conn.execute(select(susu_payments).where(susu_payments.c.account_id==a['id'],
+                susu_payments.c.reference==reference,susu_payments.c.source=='paystack_test')).mappings().first()
+            if not p:raise HTTPException(404,'Contribution reference not found.')
+        return await verify_paystack(reference)
 
     @app.post('/api/susu/{sid}/entries')
     def new_contribution(sid:str,data:SusuEntry,m=Depends(current)):
+        if m['role']=='collector' and data.kind!='contribution':raise HTTPException(403,'Only an owner can record payouts.')
+        if data.reference.startswith('susu-payment-'):
+            raise HTTPException(422,'This reference prefix is reserved for verified online contributions.')
         amt=money(data.amount)*(1 if data.kind=='contribution' else -1)
         with write(engine) as conn:
             account=conn.execute(select(susu).where(susu.c.id==sid,susu.c.merchant_id==m['id']).with_for_update()).mappings().first()
@@ -778,11 +918,19 @@ def create_app(database_url=None, overrides=None):
                     'due_date':(today()+timedelta(days=offset)).isoformat(),'description':desc})
         return {'ok':True,'note':'Fictional demonstration data. No messages or payments were sent.'}
 
+    from .operations import register_operations
+    register_operations(app,engine,current,all_debts)
+    from .workspace import register_workspace
+    register_workspace(app,engine,current,all_debts)
+    from .pdf_documents import register_documents
+    register_documents(app,engine,current)
     app.mount('/static',StaticFiles(directory=STATIC),name='static')
     @app.get('/')
     def index():return FileResponse(STATIC/'index.html')
     @app.get('/pay/{token}')
     def payment_page(token:str):return FileResponse(STATIC/'index.html')
+    @app.get('/contribute/{token}')
+    def savings_page(token:str):return FileResponse(STATIC/'index.html')
     return app
 
 app=create_app()

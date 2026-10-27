@@ -6,7 +6,7 @@ from datetime import datetime, timezone, date, timedelta
 from decimal import Decimal, InvalidOperation
 from fastapi import HTTPException
 from sqlalchemy import select, func
-from .db import debts, entries, payments, customers, audit, outbox
+from .db import debts, entries, payments, customers, audit, outbox,debt_flags,audit_actors,contact_preferences
 
 def uid():
     return secrets.token_hex(16)
@@ -51,8 +51,13 @@ def password_ok(password, hashed):
         return False
 
 def log(conn, merchant, action, entity, detail=''):
-    conn.execute(audit.insert().values(id=uid(), merchant_id=merchant,
+    aid=uid()
+    conn.execute(audit.insert().values(id=aid, merchant_id=merchant,
         action=action, entity_id=entity, detail=detail, created_at=now()))
+    from .access import actor_context
+    actor=actor_context.get()
+    if actor and actor['id']==merchant:
+        conn.execute(audit_actors.insert().values(audit_id=aid,actor_id=actor['actor_id'],name=actor['actor_name'],role=actor['role']))
 
 def balance(conn, debt_id):
     return conn.scalar(select(func.coalesce(func.sum(entries.c.amount_minor), 0))
@@ -154,6 +159,8 @@ def reverse_payment(conn, merchant, payment_id, reason):
             debt_id=p['debt_id'], kind='reversal', amount_minor=p['applied_minor'],
             reference='reversal-'+p['reference'], note=reason, created_at=now()))
     conn.execute(payments.update().where(payments.c.id==payment_id).values(status='reversed',unallocated_minor=0))
+    from .plans import invalidate
+    invalidate(conn,p['debt_id'],'Repayment reversed; review the agreed schedule.')
     invalidate_previews(conn,p['debt_id'])
     log(conn,merchant,'payment.reversed',payment_id,reason)
 
@@ -161,11 +168,22 @@ def debt_view(conn, d, public=False):
     d = dict(d)
     c = conn.execute(select(customers).where(customers.c.id==d['customer_id'])).mappings().one()
     b = balance(conn,d['id'])
-    status = 'paid' if b==0 else ('disputed' if d['disputed'] else ('overdue' if d['due_date']<today().isoformat() else 'open'))
+    cancelled=bool(conn.scalar(select(debt_flags.c.debt_id).where(debt_flags.c.debt_id==d['id'])))
+    charged=conn.scalar(select(func.coalesce(func.sum(entries.c.amount_minor),0)).where(
+        entries.c.debt_id==d['id'],entries.c.kind.in_(['opening','adjustment'])))
+    from .plans import view as plan_view
+    plan=plan_view(conn,d['id'],b,public)
+    collection_due=plan['next_due_date'] if plan and plan['status']=='active' else d['due_date']
+    consent=conn.execute(select(contact_preferences).where(contact_preferences.c.customer_id==c['id'])).mappings().first()
+    status = 'cancelled' if cancelled else ('paid' if b==0 else ('disputed' if d['disputed'] else ('overdue' if collection_due<today().isoformat() else 'open')))
     result = {'id':d['id'],'name':c['name'],'principal_minor':d['principal_minor'],
-        'balance_minor':b,'paid_minor':d['principal_minor']-b,'due_date':d['due_date'],
+        'balance_minor':b,'paid_minor':0 if cancelled else charged-b,'due_date':d['due_date'],
+        'overdue_minor':(plan['overdue_minor'] if plan and plan['status']=='active' else b) if status=='overdue' else 0,
+        'adjusted_total_minor':charged,'adjustments_minor':charged-d['principal_minor'],'cancelled':cancelled,
         'description':d['description'],'status':status,'paused':bool(d['paused']),
-        'disputed':bool(d['disputed']),'do_not_contact':bool(c['do_not_contact'])}
+        'disputed':bool(d['disputed']),'do_not_contact':bool(c['do_not_contact']),
+        'plan':plan,'collection_due_date':collection_due,'plan_review_required':bool(plan and plan['status']=='needs_review'),
+        'sms_consent':bool(consent and consent['sms_consent'] and consent['verified_phone']==c['phone'] and not c['do_not_contact'])}
     if not public:
         result.update(phone=c['phone'],public_token=d['public_token'],customer_id=d['customer_id'])
     return result

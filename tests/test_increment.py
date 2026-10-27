@@ -36,6 +36,9 @@ def current_preview(client):
     client.app.state.settings.update(reminder_start=0,reminder_end=24)
     d=client.post('/api/debts',json={'name':'Akua Example','phone':'0245557777',
         'amount':'500','due_date':today().isoformat()}).json()
+    assert client.post('/api/customers/'+d['customer_id']+'/contact',json={'expected_phone':d['phone'],
+        'phone':d['phone'],'sms_consent':True,'evidence':'Fictional customer granted test permission',
+        'reason':'Verify sandbox recipient for this test'}).status_code==200
     client.post('/api/reminders/preview')
     return d,client.get('/api/reminders').json()[0]
 
@@ -295,6 +298,6 @@ def test_v01_database_additive_upgrade_preserves_existing_ledger(tmp_path):
             kind='opening',amount_minor=50000,reference='original-opening',note='Original opening balance',created_at=now()))
     old.dispose()
     upgraded=create_app(url,{'worker_enabled':False,'paystack_key':'','sms_mode':'dry_run'})
-    assert {'webhook_inbox','sms_attempts','agent_conversations','agent_turns'} <= set(inspect(upgraded.state.engine).get_table_names())
+    assert {'webhook_inbox','sms_attempts','agent_conversations','agent_turns','susu_links','susu_payments','sms_callback_inbox','sms_delivery_reports','debt_changes','debt_flags','credit_reviews'} <= set(inspect(upgraded.state.engine).get_table_names())
     with TestClient(upgraded) as c:
         assert c.get('/api/public/existing-private-token').json()['balance_minor']==50000

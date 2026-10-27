@@ -1,6 +1,6 @@
 {
   "name": "sika-ledger-prototype",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "private": true,
   "description": "FastAPI mobile web prototype. No Node dependencies or frontend build required.",
   "scripts": {

@@ -38,7 +38,7 @@ If multiple debts match, ask which debt. Never include threats or claim a paymen
 Return every schema field; irrelevant fields must be empty strings. All money fields are GHS
 decimal strings, not pesewas. Explain that a new debt requires confirmation.
 Conversation history is supplied when available. Combine the user's follow-up with earlier
-details to complete a draft. Current corrections replace earlier values. Never interpret a
+details to complete a draft. Current corrections replace earlier values. The collection_due_date follows an active repayment plan; due_date remains the original sale due date. Never interpret a
 previous assistant reply as proof that a debt or payment was actually recorded. Ask again
 when more than one earlier draft could be meant. Do not reuse dates from an unrelated debt.
 '''
@@ -88,7 +88,7 @@ def execute_plan(conn, merchant, plan, context):
         if not records:
             return {'reply':'No matching debt records were found in your business.','trace':trace}
         total = sum(d['balance_minor'] for d in records)
-        overdue = sum(d['balance_minor'] for d in records if d['status']=='overdue')
+        overdue = sum(d.get('overdue_minor',d['balance_minor'] if d['status']=='overdue' else 0) for d in records)
         return {'reply':f'{len(records)} debt record(s). Outstanding: GHS {total/100:,.2f}. '
                         f'Overdue: GHS {overdue/100:,.2f}. Amounts are calculated from your ledger.',
                 'records':records,'trace':trace}
@@ -99,10 +99,11 @@ def execute_plan(conn, merchant, plan, context):
         if not row:
             raise HTTPException(422,'Choose a debt from your own business to draft a reminder.')
         d = debt_view(conn,row)
-        if d['balance_minor']==0 or d['disputed'] or d['paused'] or d['do_not_contact']:
-            return {'reply':'A reminder is not appropriate: this debt is settled, paused, disputed, or opted out.','trace':trace}
+        from .jobs import eligible,reminder_fact
+        if not eligible(d):
+            return {'reply':'A reminder is not appropriate: this debt is settled, paused, disputed, opted out, or its plan needs review.','trace':trace}
         # Deterministic factual template protects amount/date and avoids invented threats.
-        text = f"Hello {d['name']}, a friendly reminder: GHS {d['balance_minor']/100:,.2f} remains due on {d['due_date']}. You may pay all or part. If this record is incorrect, contact the business."
+        text = f"Hello {d['name']}, a friendly reminder: {reminder_fact(d)}. You may pay all or part. If this record is incorrect, contact the business."
         return {'reply':text,'trace':trace,'draft_only':True}
     if plan.action=='propose_debt':
         from datetime import date
