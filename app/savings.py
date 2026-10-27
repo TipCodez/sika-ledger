@@ -2,7 +2,7 @@
 import secrets
 from fastapi import HTTPException
 from sqlalchemy import select, func
-from .db import (susu, susu_links, susu_payments, contributions, customers, merchants,
+from .db import (susu, susu_links, susu_payments, contributions, customers, merchants, branding,
     new_link_expiry, link_expired)
 from .domain import uid, now, log
 
@@ -45,7 +45,12 @@ def public_account(conn,token,lock=False):
 def public_view(conn,a):
     customer=conn.scalar(select(customers.c.name).where(customers.c.id==a['customer_id']))
     business=conn.scalar(select(merchants.c.name).where(merchants.c.id==a['merchant_id']))
-    return {'name':customer,'business_name':business,'label':a['label'],
+    public_brand=conn.execute(select(branding.c.display_name,branding.c.contact)
+        .where(branding.c.merchant_id==a['merchant_id'])).mappings().first()
+    return {'name':customer,
+        'business_name':public_brand['display_name'] if public_brand else business,
+        'business_contact':(public_brand['contact'].strip()
+            if public_brand and public_brand['contact'].strip() else None),'label':a['label'],
         'daily_target_minor':a['daily_target_minor'],'balance_minor':savings_balance(conn,a['id']),
         'link_expires_at':a.get('link_expires_at'),
         'receipts':[{'id':p['id'],'amount_minor':p['amount_minor'],'source':p['source'],

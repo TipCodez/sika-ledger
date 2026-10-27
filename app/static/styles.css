@@ -1031,6 +1031,11 @@ dialog::backdrop {
 .public-card .detail-amount {
   margin: 22px 0 4px;
 }
+.business-contact {
+  margin: 8px 0 0;
+  color: var(--ink);
+  font-size: 13px;
+}
 .public-card .btn {
   width: 100%;
 }
@@ -1042,6 +1047,31 @@ dialog::backdrop {
   font-size: 10px;
   color: var(--muted);
   margin: 22px 0;
+}
+.public-footer a,
+.privacy-card a {
+  color: var(--green);
+}
+.privacy-link {
+  margin-top: 16px;
+  text-align: center;
+}
+.privacy-wrap {
+  max-width: 720px;
+}
+.privacy-card {
+  font-size: 15px;
+}
+.privacy-card h2 {
+  margin: 28px 0 10px;
+  font-size: 18px;
+}
+.privacy-card p,
+.privacy-card li {
+  line-height: 1.7;
+}
+.privacy-card ul {
+  padding-left: 20px;
 }
 .proposal {
   background: #f5f8ee;

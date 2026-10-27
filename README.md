@@ -350,10 +350,26 @@ for the current number. Revoking consent suppresses contact, pauses debts and
 invalidates queued previews. The app records the owner's attestation and evidence;
 it does not independently verify phone ownership or collect electronic consent.
 
+## Privacy notice and retention boundary
+
+The public `/privacy` page is available without an account and is linked from
+sign-in, debt payment and susu contribution screens. It explains the records
+handled by the prototype, optional test providers, customer choices, private-link
+security and the responsibilities that must be completed before live use.
+
+Current automatic expiry is limited: login sessions last 12 hours, assistant
+conversation history lasts 24 hours, and private links last 30 days unless
+renewed. Core contact, financial and audit records do not yet have an automatic
+deletion workflow. Use fictional data for testing. A live deployment needs an
+identified operator, a lawful basis, a published retention schedule and working
+procedures for access, correction, deletion and objection requests.
+
 ## Branded PDFs and database recovery
 
 **Business branding** sets the printable business name, address, public contact,
-footer and readable accent colour. Repayment acknowledgements, online susu
+footer and readable accent colour. The display name and public contact also
+appear on matching private debt and susu pages so a customer can reach the
+business without exposing its address or document footer. Repayment acknowledgements, online susu
 contribution acknowledgements and customer statements are available as PDFs.
 Statements contain debt and savings sections with separate totals. Public
 acknowledgements require the matching current private link; they omit the saved

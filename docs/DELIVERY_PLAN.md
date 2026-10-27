@@ -28,6 +28,8 @@ promises that unattended work has been scheduled.
 - Scheduled reminder dry runs and Arkesel sandbox adapter, dispute review and wrong-number suppression.
 - Saved Gemini follow-ups, durable verification inbox, link replacement and downloadable acknowledgements.
 - Automatic 30-day expiry and owner renewal for debt and susu private links.
+- Public, account-free privacy notice linked from sign-in and private customer pages.
+- Configured public business contact on matching debt and susu customer pages.
 - Separate susu records, private simulator/Paystack test contribution links, and manual payouts.
 - Audited due-date/amount corrections and cancellation of duplicate unpaid records.
 - Pending-payment recovery and explained unallocated-credit review notes.

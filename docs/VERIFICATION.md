@@ -4,7 +4,7 @@ Date: 27 October 2026. Version: 0.4.0.
 
 ## Passed
 
-- **127 pytest cases**, all passed. The suite includes parametrized invalid-money
+- **131 pytest cases**, all passed. The suite includes parametrized invalid-money
   inputs, partial repayments, duplicate requests, reversals, concurrent duplicate
   confirmation, excess credit, tenant isolation, public-link scope, disputes,
   reminder invalidation, susu payout limits, CSV formula escaping, origin checks,
@@ -27,6 +27,10 @@ Date: 27 October 2026. Version: 0.4.0.
   restore lock enforcement, safety backups, session revocation and stopped
   in-flight jobs after restore. Private-link cases cover debt and susu expiry,
   blocked public checkout, owner renewal and additive legacy-database columns.
+  Privacy-notice cases cover unauthenticated page access, links from all public
+  entry points and disclosure of the prototype's retention limitation. Public
+  business-contact cases cover debt and susu pages, branding-name fallback and
+  non-disclosure of the configured address and document footer.
   PostgreSQL is explicitly rejected by the SQLite
   recovery tool.
 - JavaScript syntax check completed successfully.

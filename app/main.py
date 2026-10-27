@@ -26,7 +26,7 @@ from .db import (make_engine, write, merchants, sessions, customers, debts, entr
     payments, disputes, outbox, audit, susu, contributions, proposals,
     webhook_inbox, sms_attempts, conversations, turns,
     susu_links,susu_payments,sms_callback_inbox,sms_reports,debt_flags,staff,session_actors,
-    audit_actors,new_link_expiry,link_expired)
+    audit_actors,branding,new_link_expiry,link_expired)
 from .domain import (uid, now, today, money, phone, password_hash, password_ok,
     log, balance, create_debt, owned_debt, debt_view, confirm_payment,
     reverse_payment, customer_get_or_create, invalidate_previews)
@@ -378,7 +378,12 @@ def create_app(database_url=None, overrides=None):
         with engine.connect() as conn:
             d=public_debt(conn,token)
             result=debt_view(conn,d,True)
-            result['business_name']=conn.scalar(select(merchants.c.name).where(merchants.c.id==d['merchant_id']))
+            merchant_name=conn.scalar(select(merchants.c.name).where(merchants.c.id==d['merchant_id']))
+            public_brand=conn.execute(select(branding.c.display_name,branding.c.contact)
+                .where(branding.c.merchant_id==d['merchant_id'])).mappings().first()
+            result['business_name']=public_brand['display_name'] if public_brand else merchant_name
+            result['business_contact']=(public_brand['contact'].strip()
+                if public_brand and public_brand['contact'].strip() else None)
             result['receipts']=[{'id':p['id'],'amount_minor':p['amount_minor'],
                 'applied_minor':p['applied_minor'],'unallocated_minor':p['unallocated_minor'],
                 'status':p['status'],'source':p['source'],'date':p['confirmed_at']}
@@ -944,6 +949,8 @@ def create_app(database_url=None, overrides=None):
     def payment_page(token:str):return FileResponse(STATIC/'index.html')
     @app.get('/contribute/{token}')
     def savings_page(token:str):return FileResponse(STATIC/'index.html')
+    @app.get('/privacy')
+    def privacy_page():return FileResponse(STATIC/'index.html')
     return app
 
 app=create_app()

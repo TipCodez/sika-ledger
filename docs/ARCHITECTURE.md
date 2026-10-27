@@ -266,3 +266,22 @@ lease, validation and a pre-restore safety snapshot. All installed app/worker
 processes cooperate. External clients and old source versions must be closed.
 Restoration revokes sessions and prevents queued work from replaying automatically.
 See BACKUP_RECOVERY.md for the archive contract and operating procedure.
+
+## Privacy and retention boundary
+
+`GET /privacy` serves the public application shell; the frontend renders an
+account-free privacy notice before requesting an authenticated session. Sign-in,
+debt payment and susu contribution screens link to it. The notice documents the
+prototype's stored data, test-provider disclosures, customer choices and
+security limitations without claiming production compliance.
+
+Sessions expire after 12 hours, saved assistant conversations after 24 hours,
+and debt/susu private links after 30 days unless renewed. Financial, contact and
+audit records have no automatic deletion lifecycle in this release. Production
+operation therefore requires a defined controller/operator, lawful basis,
+retention schedule and request-handling process outside the current codebase.
+
+Private debt and susu API responses include the configured branding display name
+and public contact for that merchant. They deliberately omit the branding address
+and footer. If no branding contact exists, the response uses `null` rather than
+exposing an account login or another internal identifier.

@@ -28,6 +28,10 @@ the final rehearsal. Do not delete valuable records to make room for samples.
 
 ## Customer page and reminders
 
+- [ ] Open `/privacy` while signed out; the notice is readable without an account.
+- [ ] Sign-in, debt payment and susu contribution screens all link to the notice.
+- [ ] Confirm the notice discloses test providers and the lack of automatic deletion for core records.
+- [ ] Configure a public business contact; confirm it appears on debt and susu pages without exposing the branding address or footer.
 - [ ] Debtor opens the private link without signing up.
 - [ ] Another invalid link does not reveal account details.
 - [ ] Wrong-number report suppresses contact across that saved customer's debts.
