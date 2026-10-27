@@ -6,7 +6,8 @@ from datetime import datetime, timezone, date, timedelta
 from decimal import Decimal, InvalidOperation
 from fastapi import HTTPException
 from sqlalchemy import select, func
-from .db import debts, entries, payments, customers, audit, outbox,debt_flags,audit_actors,contact_preferences
+from .db import (debts, entries, payments, customers, audit, outbox, debt_flags,
+    audit_actors, contact_preferences, new_link_expiry)
 
 def uid():
     return secrets.token_hex(16)
@@ -98,7 +99,8 @@ def create_debt(conn, merchant, data):
     did = uid()
     conn.execute(debts.insert().values(id=did, merchant_id=merchant, customer_id=cid,
         principal_minor=amount, due_date=due, description=data.get('description','Credit sale'),
-        public_token=secrets.token_urlsafe(32), paused=0, disputed=0, created_at=now()))
+        public_token=secrets.token_urlsafe(32),public_token_expires_at=new_link_expiry(),
+        paused=0, disputed=0, created_at=now()))
     conn.execute(entries.insert().values(id=uid(), merchant_id=merchant, debt_id=did,
         kind='opening', amount_minor=amount, reference='opening-'+did,
         note=data.get('description','Credit sale'), created_at=now()))
@@ -184,6 +186,7 @@ def debt_view(conn, d, public=False):
         'disputed':bool(d['disputed']),'do_not_contact':bool(c['do_not_contact']),
         'plan':plan,'collection_due_date':collection_due,'plan_review_required':bool(plan and plan['status']=='needs_review'),
         'sms_consent':bool(consent and consent['sms_consent'] and consent['verified_phone']==c['phone'] and not c['do_not_contact'])}
+    result['link_expires_at']=d['public_token_expires_at']
     if not public:
         result.update(phone=c['phone'],public_token=d['public_token'],customer_id=d['customer_id'])
     return result

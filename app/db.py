@@ -4,11 +4,22 @@ All writes take a SQLite immediate transaction or PostgreSQL row lock where
 balances are consumed. Money is always integer pesewas, never floating point.
 """
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import (MetaData, Table, Column, String, Integer, Text,
-                        ForeignKey, UniqueConstraint, CheckConstraint, create_engine)
+                        ForeignKey, UniqueConstraint, CheckConstraint, create_engine, inspect)
 from sqlalchemy import event
 
 meta = MetaData()
+PRIVATE_LINK_TTL_DAYS = 30
+
+def new_link_expiry():
+    return (datetime.now(timezone.utc)+timedelta(days=PRIVATE_LINK_TTL_DAYS)).isoformat()
+
+def link_expired(value):
+    if not value:return True
+    try:return datetime.fromisoformat(value) <= datetime.now(timezone.utc)
+    except (TypeError,ValueError):return True
+
 merchants = Table('merchants', meta,
     Column('id', String, primary_key=True), Column('name', String, nullable=False),
     Column('login', String, nullable=False, unique=True),
@@ -30,6 +41,7 @@ debts = Table('debts', meta,
     Column('principal_minor', Integer, nullable=False),
     Column('due_date', String, nullable=False), Column('description', String, nullable=False),
     Column('public_token', String, nullable=False, unique=True),
+    Column('public_token_expires_at', String),
     Column('paused', Integer, nullable=False, default=0),
     Column('disputed', Integer, nullable=False, default=0),
     Column('created_at', String, nullable=False), CheckConstraint('principal_minor > 0'))
@@ -123,7 +135,7 @@ turns = Table('agent_turns', meta,
 susu_links = Table('susu_links', meta,
     Column('account_id', ForeignKey('susu_accounts.id'), primary_key=True),
     Column('public_token', String, nullable=False, unique=True),
-    Column('created_at', String, nullable=False))
+    Column('created_at', String, nullable=False), Column('expires_at', String))
 susu_payments = Table('susu_payments', meta,
     Column('id', String, primary_key=True),
     Column('merchant_id', ForeignKey('merchants.id'), nullable=False),
@@ -218,6 +230,24 @@ def make_engine(url):
             lease=record.info.pop('sika_lease',None)
             if lease:lease.close()
     meta.create_all(engine)
+    # Additive upgrade for databases created before private links had expiry.
+    with engine.connect() as conn:
+        if engine.dialect.name=='sqlite':conn.exec_driver_sql('BEGIN IMMEDIATE')
+        else:conn.begin()
+        existing={name:{c['name'] for c in inspect(conn).get_columns(name)}
+            for name in ('debts','susu_links')}
+        if 'public_token_expires_at' not in existing['debts']:
+            suffix='' if engine.dialect.name=='sqlite' else ' IF NOT EXISTS'
+            conn.exec_driver_sql(f'ALTER TABLE debts ADD COLUMN{suffix} public_token_expires_at VARCHAR')
+        if 'expires_at' not in existing['susu_links']:
+            suffix='' if engine.dialect.name=='sqlite' else ' IF NOT EXISTS'
+            conn.exec_driver_sql(f'ALTER TABLE susu_links ADD COLUMN{suffix} expires_at VARCHAR')
+        expiry=new_link_expiry()
+        conn.execute(debts.update().where(debts.c.public_token_expires_at.is_(None))
+            .values(public_token_expires_at=expiry))
+        conn.execute(susu_links.update().where(susu_links.c.expires_at.is_(None))
+            .values(expires_at=expiry))
+        conn.commit()
     return engine
 
 @contextmanager

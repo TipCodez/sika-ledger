@@ -563,7 +563,7 @@ async function renderPage() {
           ? rows
               .map(
                 (r) =>
-                  `<article class="record-card"><div class="record-meta"><h3>${esc(r.name)} · ${esc(r.label)}</h3><strong>GH₵ ${cash(r.balance_minor)}</strong></div><p class="subtle">Daily target GH₵ ${cash(r.daily_target_minor)} · ${r.entries.length} recorded entries</p><div class="button-row"><button class="btn secondary tiny" data-susu="${r.id}">${isOwner() ? "Record contribution / payout" : "Record contribution"}</button><a class="btn secondary tiny" href="/contribute/${r.public_token}" target="_blank" rel="noopener">Open contribution link ↗</a></div>${r.entries
+                  `<article class="record-card"><div class="record-meta"><h3>${esc(r.name)} · ${esc(r.label)}</h3><strong>GH₵ ${cash(r.balance_minor)}</strong></div><p class="subtle">Daily target GH₵ ${cash(r.daily_target_minor)} · ${r.entries.length} recorded entries · Link expires ${fmtdate(r.link_expires_at)}</p><div class="button-row"><button class="btn secondary tiny" data-susu="${r.id}">${isOwner() ? "Record contribution / payout" : "Record contribution"}</button><a class="btn secondary tiny" href="/contribute/${r.public_token}" target="_blank" rel="noopener">Open contribution link ↗</a>${isOwner() ? `<button class="text-btn" data-rotate-susu="${r.id}">Renew private link</button>` : ""}</div>${r.entries
                     .slice(0, 4)
                     .map(
                       (e) =>
@@ -578,6 +578,19 @@ async function renderPage() {
     else $("#new-susu").onclick = newSusu;
     $$("[data-susu]").forEach(
       (b) => (b.onclick = () => susuEntry(b.dataset.susu)),
+    );
+    $$("[data-rotate-susu]").forEach(
+      (b) =>
+        (b.onclick = async () => {
+          if (!confirm("Renew this contribution link? The previous link will stop working.")) return;
+          try {
+            await api("/susu/" + b.dataset.rotateSusu + "/rotate-link", "POST", {});
+            await renderPage();
+            toast("Contribution link renewed for 30 days.");
+          } catch (e) {
+            toast(e.message);
+          }
+        }),
     );
     return;
   }
@@ -660,6 +673,10 @@ async function showDebt(id) {
       d.name,
       `<div class="record-meta"><span>${esc(d.description)}</span>${badge(d.status)}</div><div class="detail-amount"><small>GH₵</small> ${cash(d.balance_minor)}</div><p class="subtle small">Outstanding balance${d.adjustments_minor ? ` · Corrections: GH₵ ${cash(d.adjustments_minor)}` : ""}</p><dl class="detail-list"><div><dt>Original sale</dt><dd>GH₵ ${cash(d.principal_minor)}</dd></div><div><dt>Repayments, net of reversals</dt><dd>GH₵ ${cash(d.paid_minor)}</dd></div><div><dt>Original due date</dt><dd>${fmtdate(d.due_date)}</dd></div><div><dt>Customer phone</dt><dd>${esc(d.phone)}</dd></div></dl><div class="button-row">${d.balance_minor > 0 ? '<button class="btn" id="record-payment">Record repayment</button>' : ""}<a class="btn secondary" target="_blank" rel="noopener" href="/pay/${d.public_token}">Open payment page ↗</a><button class="btn secondary" id="copy-link">Copy link</button>${isOwner() ? '<button class="text-btn" id="rotate-link">Replace private link</button>' : ""}${isOwner() && !d.cancelled ? '<button class="text-btn" id="correct-debt">Correct record</button>' : ""}${isOwner() ? `<button class="text-btn" id="pause-debt">${d.paused ? "Resume reminders" : "Pause reminders"}</button>` : ""}${isOwner() && d.balance_minor > 0 && !d.cancelled ? '<button class="btn secondary tiny" id="agree-plan">Agree repayment plan</button>' : ""}</div>${d.disputed ? '<div class="info warning">Customer dispute is open. Reminders and new checkout are suspended.</div>' : ""}${d.do_not_contact ? '<div class="info warning">This customer is opted out after a wrong-number report.</div>' : ""}<div class="info small">Cash and direct MoMo entries are trader-reported. Only transactions labelled “Paystack test” are verified against a payment provider.</div><h3>Financial history</h3>${d.ledger.map((e) => `<div class="ledger-item"><div><p><strong>${esc(e.kind)}</strong> · ${esc(e.note)}</p><small>${fmtdate(e.created_at)}</small></div><span class="amount">${e.amount_minor < 0 ? "−" : "+"} GH₵ ${cash(Math.abs(e.amount_minor))}</span></div>`).join("")}<h3 class="section-gap">Repayment records</h3>${d.payments.length ? d.payments.map((p) => `<div class="ledger-item"><div><p>GH₵ ${cash(p.amount_minor)} · ${esc(p.source.replaceAll("_", " "))}</p><small>${esc(p.status)}${p.unallocated_minor ? ` · GH₵ ${cash(p.unallocated_minor)} unallocated` : ""}</small>${isOwner() && p.status === "confirmed" && p.source !== "paystack_test" ? `<div><button class="text-btn" data-reverse="${p.id}">Reverse ledger entry</button></div>` : ""}</div><div><small class="mono">${esc(p.id.slice(0, 10))}</small>${["confirmed", "reversed"].includes(p.status) ? `<br><a class="muted-link" href="/api/payments/${p.id}/receipt.pdf">Download PDF acknowledgement</a>` : ""}</div></div>`).join("") : '<p class="small subtle">No repayments yet.</p>'}`,
     );
+    $(".modal-body", mc).insertAdjacentHTML(
+      "beforeend",
+      `<p class="small subtle section-gap">Private payment link expires ${fmtdate(d.link_expires_at)}. Replace it to issue a fresh 30-day link.</p>`,
+    );
     $(".modal-body", mc).insertAdjacentHTML("beforeend", planPanel(d.plan));
     if ($("#agree-plan")) $("#agree-plan").onclick = () => planDialog(d);
     if ($("#cancel-plan"))
@@ -690,7 +707,7 @@ async function showDebt(id) {
           await api("/debts/" + id + "/rotate-link", "POST", {});
           await refresh();
           await showDebt(id);
-          toast("Private link replaced. Share the new link privately.");
+          toast("Private link renewed for 30 days. Share the new link privately.");
         } catch (e) {
           toast(e.message);
         }

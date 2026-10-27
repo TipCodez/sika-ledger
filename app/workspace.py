@@ -6,7 +6,8 @@ from fastapi import Depends,HTTPException
 from pydantic import BaseModel,ConfigDict,Field,field_validator
 from sqlalchemy import select
 from .db import (write,customers,debts,entries,payments,disputes,susu,contributions,
-    staff,sessions,session_actors,contact_preferences,contact_history,susu_links,branding,plans)
+    staff,sessions,session_actors,contact_preferences,contact_history,susu_links,branding,plans,
+    new_link_expiry)
 from .domain import uid,now,phone,password_hash,log,owned_debt,debt_view,invalidate_previews
 from . import savings
 from . import plans as schedules
@@ -125,14 +126,17 @@ def register_workspace(app,engine,current,all_debts):
             else:conn.execute(contact_preferences.insert().values(customer_id=cid,**values))
             for d in ds:
                 fields={'paused':1} if changed or not data.sms_consent else {}
-                if changed:fields['public_token']=secrets.token_urlsafe(32)
+                if changed:
+                    fields['public_token']=secrets.token_urlsafe(32)
+                    fields['public_token_expires_at']=new_link_expiry()
                 if fields:conn.execute(debts.update().where(debts.c.id==d['id']).values(**fields))
                 invalidate_previews(conn,d['id'])
             if changed:
                 for sid in conn.scalars(select(susu.c.id).where(susu.c.customer_id==cid)):
                     savings.owned_account(conn,m['id'],sid,True)
                     savings.ensure_link(conn,sid)
-                    conn.execute(susu_links.update().where(susu_links.c.account_id==sid).values(public_token=secrets.token_urlsafe(32)))
+                    conn.execute(susu_links.update().where(susu_links.c.account_id==sid).values(
+                        public_token=secrets.token_urlsafe(32),expires_at=new_link_expiry()))
             conn.execute(contact_history.insert().values(id=uid(),merchant_id=m['id'],customer_id=cid,
                 payload=json.dumps({'before':{'phone':c['phone'],**before},'after':{'phone':number,**values}}),reason=data.reason,created_at=now()))
             log(conn,m['id'],'customer.contact_reviewed',cid,data.reason)

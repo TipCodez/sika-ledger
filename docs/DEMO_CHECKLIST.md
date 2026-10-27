@@ -41,6 +41,7 @@ the final rehearsal. Do not delete valuable records to make room for samples.
 - [ ] An ambiguous timeout does not automatically resend.
 - [ ] Dry-run/sandbox labels are visible; no claim of handset delivery is made.
 - [ ] Replace a private link: the old URL stops working and the balance is preserved.
+- [ ] Expire a debt or susu link: the public route returns 410 until the owner renews it.
 - [ ] Download an acknowledgement; source and current balance are clear.
 
 ## Corrections, recovery and reports

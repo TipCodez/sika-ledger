@@ -2,7 +2,8 @@
 import secrets
 from fastapi import HTTPException
 from sqlalchemy import select, func
-from .db import susu, susu_links, susu_payments, contributions, customers, merchants
+from .db import (susu, susu_links, susu_payments, contributions, customers, merchants,
+    new_link_expiry, link_expired)
 from .domain import uid, now, log
 
 def savings_balance(conn,sid):
@@ -23,24 +24,30 @@ def ensure_link(conn,sid):
         token=conn.scalar(select(susu_links.c.public_token).where(susu_links.c.account_id==sid))
         if token:return token
         token=secrets.token_urlsafe(32)
-        conn.execute(susu_links.insert().values(account_id=sid,public_token=token,created_at=now()))
+        conn.execute(susu_links.insert().values(account_id=sid,public_token=token,
+            created_at=now(),expires_at=new_link_expiry()))
     return token
 
 def public_account(conn,token,lock=False):
     # Lock only the parent row, consistently with manual payout/contribution flows.
-    sid=conn.scalar(select(susu_links.c.account_id).where(susu_links.c.public_token==token))
-    if not sid:raise HTTPException(404,'Contribution link not found.')
+    link=conn.execute(select(susu_links).where(susu_links.c.public_token==token)).mappings().first()
+    if not link:raise HTTPException(404,'Contribution link not found.')
+    if link_expired(link['expires_at']):
+        raise HTTPException(410,'This private contribution link has expired. Ask the business for a new link.')
+    sid=link['account_id']
     q=select(susu).where(susu.c.id==sid)
     if lock:q=q.with_for_update()
     row=conn.execute(q).mappings().first()
     if not row:raise HTTPException(404,'Contribution link not found.')
-    return dict(row)
+    result=dict(row);result['link_expires_at']=link['expires_at']
+    return result
 
 def public_view(conn,a):
     customer=conn.scalar(select(customers.c.name).where(customers.c.id==a['customer_id']))
     business=conn.scalar(select(merchants.c.name).where(merchants.c.id==a['merchant_id']))
     return {'name':customer,'business_name':business,'label':a['label'],
         'daily_target_minor':a['daily_target_minor'],'balance_minor':savings_balance(conn,a['id']),
+        'link_expires_at':a.get('link_expires_at'),
         'receipts':[{'id':p['id'],'amount_minor':p['amount_minor'],'source':p['source'],
             'status':p['status'],'date':p['confirmed_at']} for p in conn.execute(
                 select(susu_payments).where(susu_payments.c.account_id==a['id'],

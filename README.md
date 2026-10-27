@@ -267,8 +267,9 @@ The private, account-free page supports the demo simulator and configured
 Paystack test checkout. Starting checkout leaves savings unchanged; successful
 simulation confirmation or matching provider verification credits it once.
 The page lists confirmed online contributions and their sources. It does not
-expose the customer's phone number. Account owners can rotate links through
-`POST /api/susu/{account_id}/rotate-link`; UI rotation is not yet exposed.
+expose the customer's phone number. Private contribution links expire after 30
+days. Account owners can renew them from the Susu savings screen or through
+`POST /api/susu/{account_id}/rotate-link`.
 
 Manual contributions and externally completed payouts remain available. Payouts
 cannot exceed the recorded savings balance. No automatic payout, scheduled debit,
@@ -384,7 +385,8 @@ invoices. They do not include a customer's full phone number or private token.
 
 Use **Replace private link** in the debt details to invalidate an earlier link.
 Ledger entries and pending provider references remain intact and reconcilable.
-Distribute the new link privately. Links do not yet expire automatically.
+Distribute the new link privately. Debt and susu links expire after 30 days;
+renewal replaces the token and starts a fresh 30-day period.
 
 ## Run automated checks
 

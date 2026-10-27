@@ -27,6 +27,7 @@ promises that unattended work has been scheduled.
 - Gemini structured planner, read tools, debt proposals and explicit confirmation.
 - Scheduled reminder dry runs and Arkesel sandbox adapter, dispute review and wrong-number suppression.
 - Saved Gemini follow-ups, durable verification inbox, link replacement and downloadable acknowledgements.
+- Automatic 30-day expiry and owner renewal for debt and susu private links.
 - Separate susu records, private simulator/Paystack test contribution links, and manual payouts.
 - Audited due-date/amount corrections and cancellation of duplicate unpaid records.
 - Pending-payment recovery and explained unallocated-credit review notes.

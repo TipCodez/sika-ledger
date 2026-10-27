@@ -25,7 +25,8 @@ from sqlalchemy.exc import IntegrityError
 from .db import (make_engine, write, merchants, sessions, customers, debts, entries,
     payments, disputes, outbox, audit, susu, contributions, proposals,
     webhook_inbox, sms_attempts, conversations, turns,
-    susu_links,susu_payments,sms_callback_inbox,sms_reports,debt_flags,staff,session_actors,audit_actors)
+    susu_links,susu_payments,sms_callback_inbox,sms_reports,debt_flags,staff,session_actors,
+    audit_actors,new_link_expiry,link_expired)
 from .domain import (uid, now, today, money, phone, password_hash, password_ok,
     log, balance, create_debt, owned_debt, debt_view, confirm_payment,
     reverse_payment, customer_get_or_create, invalidate_previews)
@@ -200,6 +201,8 @@ def create_app(database_url=None, overrides=None):
         if lock:q=q.with_for_update()
         row=conn.execute(q).mappings().first()
         if not row:raise HTTPException(404,'Payment link not found.')
+        if link_expired(row['public_token_expires_at']):
+            raise HTTPException(410,'This private payment link has expired. Ask the business for a new link.')
         return dict(row)
 
     def acknowledgement(conn,p):
@@ -362,10 +365,13 @@ def create_app(database_url=None, overrides=None):
         with write(engine) as conn:
             owned_debt(conn,m['id'],did,True)
             token=secrets.token_urlsafe(32)
-            conn.execute(debts.update().where(debts.c.id==did).values(public_token=token))
+            expiry=new_link_expiry()
+            conn.execute(debts.update().where(debts.c.id==did).values(
+                public_token=token,public_token_expires_at=expiry))
             invalidate_previews(conn,did)
             log(conn,m['id'],'debt.link_rotated',did)
-        return {'public_token':token,'note':'Previous payment links are now invalid. Existing provider intents remain reconcilable.'}
+        return {'public_token':token,'link_expires_at':expiry,
+            'note':'Previous payment links are now invalid. Existing provider intents remain reconcilable.'}
 
     @app.get('/api/public/{token}')
     def public(token:str):
@@ -577,7 +583,8 @@ def create_app(database_url=None, overrides=None):
         for d in all_debts(conn,merchant):
             days=(current_day-date.fromisoformat(d['collection_due_date'])).days
             eligible=days in (-1,0) or (days>0 and days%3==0)
-            if not eligible or d['balance_minor']==0 or d['paused'] or d['disputed'] or d['do_not_contact'] or d['plan_review_required']:continue
+            if (not eligible or d['balance_minor']==0 or d['paused'] or d['disputed']
+                or d['do_not_contact'] or d['plan_review_required'] or link_expired(d['link_expires_at'])):continue
             day=current_day.isoformat()
             existing=conn.execute(select(outbox).where(outbox.c.debt_id==d['id'],outbox.c.day_key==day)).mappings().first()
             if existing and existing['status']!='stale':continue
@@ -793,6 +800,8 @@ def create_app(database_url=None, overrides=None):
             for r in conn.execute(select(susu).where(susu.c.merchant_id==m['id'])).mappings():
                 item=dict(r)
                 item['public_token']=savings.ensure_link(conn,r['id'])
+                item['link_expires_at']=conn.scalar(select(susu_links.c.expires_at)
+                    .where(susu_links.c.account_id==r['id']))
                 item['name']=conn.scalar(select(customers.c.name).where(customers.c.id==r['customer_id']))
                 item['balance_minor']=conn.scalar(select(func.coalesce(func.sum(contributions.c.amount_minor),0)).where(contributions.c.account_id==r['id']))
                 item['entries']=[dict(x) for x in conn.execute(select(contributions).where(contributions.c.account_id==r['id']).order_by(contributions.c.created_at.desc())).mappings()]
@@ -809,7 +818,9 @@ def create_app(database_url=None, overrides=None):
                 daily_target_minor=target,created_at=now()))
             token=savings.ensure_link(conn,sid)
             log(conn,m['id'],'susu.account_created',sid)
-        return {'id':sid,'public_token':token}
+        with engine.connect() as conn:
+            expiry=conn.scalar(select(susu_links.c.expires_at).where(susu_links.c.account_id==sid))
+        return {'id':sid,'public_token':token,'link_expires_at':expiry}
 
     @app.post('/api/susu/{sid}/rotate-link')
     def rotate_susu_link(sid:str,m=Depends(current)):
@@ -817,9 +828,11 @@ def create_app(database_url=None, overrides=None):
             savings.owned_account(conn,m['id'],sid,True)
             savings.ensure_link(conn,sid)
             token=secrets.token_urlsafe(32)
-            conn.execute(susu_links.update().where(susu_links.c.account_id==sid).values(public_token=token))
+            expiry=new_link_expiry()
+            conn.execute(susu_links.update().where(susu_links.c.account_id==sid).values(
+                public_token=token,expires_at=expiry))
             log(conn,m['id'],'susu.link_rotated',sid)
-        return {'public_token':token}
+        return {'public_token':token,'link_expires_at':expiry}
 
     @app.get('/api/susu-public/{token}')
     def contribution_page_data(token:str):

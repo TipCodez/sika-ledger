@@ -11,7 +11,7 @@ from sqlalchemy import select, and_, or_
 from fastapi import HTTPException
 import httpx
 from .db import (write, webhook_inbox, outbox, sms_attempts, merchants,
-                 customers, debts, conversations, turns)
+                 customers, debts, conversations, turns, link_expired)
 from .domain import now, today, uid, log, owned_debt, debt_view
 
 logger = logging.getLogger(__name__)
@@ -37,7 +37,8 @@ def reminder_body(settings, merchant_name, debt):
             f"Incorrect record? Contact {merchant_name}.")
 
 def eligible(debt):
-    return (debt['balance_minor'] > 0 and not debt.get('plan_review_required',False) and not any(debt[k] for k in
+    return (debt['balance_minor'] > 0 and not link_expired(debt.get('link_expires_at'))
+        and not debt.get('plan_review_required',False) and not any(debt[k] for k in
             ('paused','disputed','do_not_contact')))
 
 async def process_webhooks(app, limit=10):

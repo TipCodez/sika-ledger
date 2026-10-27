@@ -10,8 +10,10 @@ the merchant from a server-side session and scope reads and writes accordingly.
 The public debt and susu routes require a random 256-bit capability token. That token
 grants access to one debt or savings page and its payment acknowledgements; share it privately.
 It does not grant access to the merchant dashboard or other customers. Tokens
-can be replaced by their owner; replacement invalidates the previous link.
-Automatic expiry remains a hardening item before real use.
+expire after 30 days and can be renewed by their owner. Renewal replaces the
+token, invalidates the previous link and starts a fresh 30-day period. Existing
+installations add the expiry columns at startup; older links receive 30 days
+from their first upgraded startup.
 
 ## Tables and relationships
 
