@@ -109,14 +109,14 @@ def register_documents(app,engine,current):
     @app.get('/api/payments/{pid}/receipt.pdf')
     def receipt(pid:str,m=Depends(current)):
         with engine.connect() as conn:
-            p=conn.execute(select(payments).where(payments.c.id==pid,payments.c.merchant_id==m['id'],payments.c.status.in_(['confirmed','reversed']))).mappings().first()
+            p=conn.execute(select(payments).where(payments.c.id==pid,payments.c.merchant_id==m['id'],payments.c.status.in_(['confirmed','reversed','partially_refunded','refunded']))).mappings().first()
             if not p:raise HTTPException(404,'Receipt not found.')
             return pdf_response(repayment_pdf(conn,p),'repayment-'+pid)
     @app.get('/api/public/{token}/receipts/{pid}/pdf')
     def public_receipt(token:str,pid:str):
         with engine.connect() as conn:
             did=conn.scalar(select(debts.c.id).where(debts.c.public_token==token))
-            p=conn.execute(select(payments).where(payments.c.debt_id==did,payments.c.id==pid,payments.c.status.in_(['confirmed','reversed']))).mappings().first() if did else None
+            p=conn.execute(select(payments).where(payments.c.debt_id==did,payments.c.id==pid,payments.c.status.in_(['confirmed','reversed','partially_refunded','refunded']))).mappings().first() if did else None
             if not p:raise HTTPException(404,'Receipt not found.')
             return pdf_response(repayment_pdf(conn,p),'repayment-'+pid)
     @app.get('/api/reports/customers/{cid}/statement.pdf')

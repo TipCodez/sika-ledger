@@ -213,6 +213,54 @@ branding = Table('business_branding',meta,
     Column('display_name',String,nullable=False),Column('address',String,nullable=False),
     Column('contact',String,nullable=False),Column('footer',String,nullable=False),
     Column('accent',String,nullable=False),Column('updated_at',String,nullable=False))
+provider_accounts = Table('provider_accounts',meta,
+    Column('merchant_id',ForeignKey('merchants.id'),primary_key=True),
+    Column('provider',String,nullable=False),Column('subaccount_code',String,nullable=False,unique=True),
+    Column('provider_account_id',String,nullable=False),Column('domain',String,nullable=False),
+    Column('status',String,nullable=False),Column('business_name',String,nullable=False),
+    Column('settlement_bank',String,nullable=False),Column('account_name',String,nullable=False),
+    Column('account_last4',String,nullable=False),Column('created_at',String,nullable=False),
+    Column('updated_at',String,nullable=False),
+    CheckConstraint("provider = 'paystack'"),
+    CheckConstraint("domain IN ('test','live')"),
+    CheckConstraint("status IN ('pending_review','active','disabled')"))
+
+provider_refunds = Table('provider_refunds',meta,
+    Column('id',String,primary_key=True),Column('merchant_id',ForeignKey('merchants.id'),nullable=False),
+    Column('payment_id',ForeignKey('payments.id'),nullable=False),Column('request_key',String,nullable=False),
+    Column('provider_refund_id',String,unique=True),Column('amount_minor',Integer,nullable=False),
+    Column('ledger_minor',Integer,nullable=False,default=0),Column('status',String,nullable=False),
+    Column('reason',Text,nullable=False),Column('provider_reason',Text),
+    Column('created_at',String,nullable=False),Column('updated_at',String,nullable=False),
+    UniqueConstraint('merchant_id','request_key'),CheckConstraint('amount_minor > 0'),
+    CheckConstraint("status IN ('initiating','unknown','pending','processing','processed','failed','needs_attention')"))
+provider_disputes = Table('provider_disputes',meta,
+    Column('id',String,primary_key=True),Column('merchant_id',ForeignKey('merchants.id'),nullable=False),
+    Column('payment_id',ForeignKey('payments.id'),nullable=False),Column('provider_dispute_id',String,unique=True,nullable=False),
+    Column('status',String,nullable=False),Column('resolution',String),Column('refund_amount_minor',Integer),
+    Column('due_at',String),Column('created_at',String,nullable=False),Column('updated_at',String,nullable=False))
+provider_event_inbox = Table('provider_event_inbox',meta,
+    Column('id',String,primary_key=True),Column('merchant_id',ForeignKey('merchants.id'),nullable=False),
+    Column('event_key',String,unique=True,nullable=False),Column('event_type',String,nullable=False),
+    Column('provider_object_id',String,nullable=False),Column('reference',String,nullable=False),
+    Column('status',String,nullable=False),Column('attempts',Integer,nullable=False,default=0),
+    Column('next_attempt_at',String,nullable=False),Column('locked_until',String),Column('last_error',Text),
+    Column('created_at',String,nullable=False),Column('processed_at',String))
+provider_settlements = Table('provider_settlements',meta,
+    Column('id',String,primary_key=True),Column('merchant_id',ForeignKey('merchants.id'),nullable=False),
+    Column('provider_settlement_id',String,nullable=False),Column('domain',String,nullable=False),
+    Column('status',String,nullable=False),Column('currency',String,nullable=False),
+    Column('total_amount_minor',Integer,nullable=False),Column('effective_amount_minor',Integer,nullable=False),
+    Column('fees_minor',Integer,nullable=False),Column('settlement_date',String),
+    Column('reconciliation_status',String,nullable=False),Column('created_at',String,nullable=False),
+    Column('updated_at',String,nullable=False),UniqueConstraint('merchant_id','provider_settlement_id'))
+settlement_items = Table('settlement_items',meta,
+    Column('id',String,primary_key=True),Column('merchant_id',ForeignKey('merchants.id'),nullable=False),
+    Column('settlement_id',ForeignKey('provider_settlements.id'),nullable=False),
+    Column('provider_transaction_id',String,nullable=False),Column('reference',String,nullable=False),
+    Column('amount_minor',Integer,nullable=False),Column('local_payment_id',ForeignKey('payments.id')),
+    Column('match_status',String,nullable=False),Column('created_at',String,nullable=False),
+    UniqueConstraint('settlement_id','provider_transaction_id'))
 
 def make_engine(url):
     engine = create_engine(url, connect_args={'check_same_thread': False, 'timeout': 20}

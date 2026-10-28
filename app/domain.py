@@ -125,7 +125,7 @@ def confirm_payment(conn, reference, note='Provider verified'):
     d = owned_debt(conn, p['merchant_id'], p['debt_id'], lock=True)
     p = dict(conn.execute(select(payments).where(payments.c.reference==reference)
                          .with_for_update()).mappings().one())
-    if p['status'] in ('confirmed','reversed'):
+    if p['status'] in ('confirmed','reversed','partially_refunded','refunded'):
         return {'duplicate':True, 'payment_id':p['id'], 'balance_minor':balance(conn,d['id'])}
     if p['status'] != 'pending':
         raise HTTPException(409, 'This payment cannot be confirmed.')
@@ -154,7 +154,7 @@ def reverse_payment(conn, merchant, payment_id, reason):
         return
     if p['status']!='confirmed':
         raise HTTPException(409,'Only confirmed payments can be reversed.')
-    if p['source']=='paystack_test':
+    if p['source'] in ('paystack_test','paystack_live'):
         raise HTTPException(409,'Provider refunds need provider-side verification; manual reversal is disabled for Paystack transactions.')
     if p['applied_minor']:
         conn.execute(entries.insert().values(id=uid(), merchant_id=merchant,

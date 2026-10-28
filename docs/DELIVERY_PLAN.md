@@ -2,8 +2,10 @@
 
 Owner: Raphael. Target: **7 November 2026**, Africa/Accra.
 
-This v0.4 bundle implements the prototype workflows; live collection and
-settlement remain outside its scope. Dates below are proposed work milestones, not background jobs or
+This v0.4 bundle implements the prototype workflows and guarded Paystack live
+collection, refund/dispute intake and settlement reconciliation foundations.
+Provider approval and real-money acceptance testing remain operational prerequisites.
+Dates below are proposed work milestones, not background jobs or
 promises that unattended work has been scheduled.
 
 | Dates         | Milestone                                           | Evidence required                                                                          |
@@ -30,6 +32,9 @@ promises that unattended work has been scheduled.
 - Automatic 30-day expiry and owner renewal for debt and susu private links.
 - Public, account-free privacy notice linked from sign-in and private customer pages.
 - Configured public business contact on matching debt and susu customer pages.
+- Guarded live Paystack mode with owner-linked merchant subaccounts and masked settlement data.
+- Idempotent Paystack refunds, durable dispute events and transaction-level settlement reconciliation.
+- Guarded Arkesel live mode retaining consent, quiet-hour and unknown-outcome protections.
 - Separate susu records, private simulator/Paystack test contribution links, and manual payouts.
 - Audited due-date/amount corrections and cancellation of duplicate unpaid records.
 - Pending-payment recovery and explained unallocated-credit review notes.

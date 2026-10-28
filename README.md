@@ -138,8 +138,8 @@ The provider requires an email at initialization. This first prototype uses the
 configured test email for all sandbox checkouts; debtor accounts still do not
 require email. **Do not reuse this approach for a live multi-merchant service.**
 
-Only `sk_test_` keys are accepted. Startup rejects live keys. Use only provider
-test payment details. Test channel availability depends on the provider's test
+Test mode accepts only `sk_test_` keys. Live keys require every approval guard
+described below. Test channel availability depends on the provider's test
 environment; an unavailable MoMo test channel must not be treated as a real
 MoMo integration success.
 
@@ -169,11 +169,32 @@ the remaining debt is paid down to zero and the excess becomes visible
 unallocated credit for review. The app never silently makes a negative debt or
 pretends that excess funds were refunded.
 
-Provider-side refunds, chargeback handling, settlements and actual merchant
-onboarding are not implemented. Manual reversal is blocked for provider test
-transactions. Non-success payment states remain unallocated; the app can retry
-verification without inventing a successful payment. Live payments are outside
-this release.
+Provider refunds are owner-initiated and idempotent. A request alone never
+changes the ledger: only a signed event followed by a successful Paystack refund
+lookup can mark it processed. Refunds consume unallocated credit before reopening
+debt. Provider disputes pause collection and are tracked separately from customer
+reports; dispute events do not invent a refund. Settlement sync and reconciliation
+match each Paystack transaction to its local reference and flag unknown or
+amount-mismatched items for review. Manual reversal remains blocked for provider
+transactions.
+
+### Approved live Paystack collection foundation
+
+Live collection is disabled by default. Startup rejects a live key unless
+`ENABLE_LIVE_PAYMENTS=true`, `PAYSTACK_LIVE_ACCOUNT_APPROVED=true`, an HTTPS
+`PUBLIC_BASE_URL`, and `COOKIE_SECURE=true` are all configured. Settings lets an
+owner create and refresh a Paystack subaccount. The full settlement account
+number is sent directly to Paystack and is never stored locally; only provider
+identifiers, the resolved account name and its last four digits are retained.
+
+A live checkout requires an email for the provider receipt and an active,
+verified merchant subaccount. It uses GHS, the merchant subaccount and
+`bearer=subaccount`, so the merchant bears provider fees. Balances still change
+only after signed webhook intake and server verification in the live environment.
+The owner API can list refunds and provider disputes, review/retry durable finance
+events, sync recent settlements, and reconcile every transaction in a settlement.
+Ambiguous refund submissions are marked `unknown` for manual provider review and
+are never automatically submitted again.
 
 ## Reminder processing and SMS sandbox
 
@@ -210,7 +231,11 @@ The adapter posts to Arkesel SMS API v2 with **sandbox fixed to true**. A succes
 response is recorded as `sandbox_accepted`. A separate sandbox status report can
 be reconciled using the optional callback path below. Real handset sending,
 billing confirmation and sender-ID approval are not part of this release.
-Startup rejects any live SMS mode.
+Approved live SMS uses `SMS_MODE=arkesel_live` and is rejected unless
+`ENABLE_LIVE_SMS=true`, `ARKESEL_SENDER_ID_APPROVED=true`, the API key, HTTPS
+public URL and secure cookies are all configured. Consent, quiet hours,
+last-second eligibility checks and the no-resend rule for unknown outcomes still
+apply. Provider acceptance is not treated as proof of handset delivery.
 
 Timeouts and ambiguous responses become `unknown`. Interrupted sends also become
 `unknown` after a recovery interval; neither case is automatically resent.

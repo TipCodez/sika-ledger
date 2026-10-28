@@ -99,7 +99,7 @@ def register_operations(app,engine,current,all_debts):
         with engine.connect() as conn:
             p=conn.execute(select(table).where(table.c.id==pid,table.c.merchant_id==m['id'])).mappings().first()
             if not p:raise HTTPException(404,'Payment not found.')
-            if p['source']!='paystack_test':raise HTTPException(409,'This payment is not a Paystack test transaction.')
+            if p['source'] not in ('paystack_test','paystack_live'):raise HTTPException(409,'This payment is not a Paystack transaction.')
             ref=p['reference']
         return await app.state.verify_paystack(ref)
 
@@ -109,7 +109,7 @@ def register_operations(app,engine,current,all_debts):
             p=conn.execute(select(payments).where(payments.c.id==pid,payments.c.merchant_id==m['id'])
                 .with_for_update()).mappings().first()
             if not p:raise HTTPException(404,'Payment not found.')
-            if p['status']!='confirmed' or p['unallocated_minor']<=0:raise HTTPException(409,'This payment has no confirmed unallocated credit.')
+            if p['status'] not in ('confirmed','partially_refunded') or p['unallocated_minor']<=0:raise HTTPException(409,'This payment has no confirmed unallocated credit.')
             previous=conn.scalar(select(credit_reviews.c.payment_id).where(credit_reviews.c.payment_id==pid))
             values=dict(merchant_id=m['id'],note=data.reason,created_at=now())
             if previous:conn.execute(credit_reviews.update().where(credit_reviews.c.payment_id==pid).values(**values))

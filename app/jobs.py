@@ -1,8 +1,4 @@
-"""Durable background work. Payment verification retries are idempotent.
-
-SMS submission is deliberately sandbox-only in this prototype. A timeout is an
-unknown outcome, never an excuse to automatically submit the same message again.
-"""
+"""Durable background work. Provider retries are idempotent or review-gated."""
 import asyncio
 import json
 import logging
@@ -89,10 +85,11 @@ async def process_webhooks(app, limit=10):
 
 async def submit_sandbox(settings, number, body):
     if not settings['arkesel_key']:
-        return {'status':'failed','error':'Arkesel sandbox key is not configured.'}
+        return {'status':'failed','error':'Arkesel API key is not configured.'}
     try:
+        live=settings.get('sms_mode')=='arkesel_live'
         payload={'sender':settings['sms_sender'],'message':body,
-            'recipients':[number],'sandbox':True}
+            'recipients':[number],'sandbox':not live}
         if settings.get('arkesel_callbacks') and settings['base_url'].startswith('https://'):
             payload['callback_url']=settings['base_url']+'/api/webhooks/arkesel'
         async with httpx.AsyncClient(timeout=12) as client:
@@ -110,14 +107,14 @@ async def submit_sandbox(settings, number, body):
         identifier=next((str(r['id']) for r in rows if isinstance(r,dict) and r.get('id')),None)
         if not identifier:
             return {'status':'unknown','error':'No provider message ID returned; inspect provider history.'}
-        return {'status':'sandbox_accepted','provider_id':identifier}
+        return {'status':'live_accepted' if live else 'sandbox_accepted','provider_id':identifier}
     except (httpx.HTTPError,ValueError,TypeError,AttributeError):
         return {'status':'unknown','error':'Submission outcome is unknown. No automatic resend will occur.'}
 
 async def process_sms(app,limit=10):
     settings=app.state.settings
     if not within_hours(settings):return {'processed':0,'skipped':'outside_hours'}
-    counts={'processed':0}
+    counts={'processed':0,'live_accepted':0}
     engine=app.state.engine
     for _ in range(limit):
         with write(engine) as conn:
@@ -160,10 +157,13 @@ async def process_sms(app,limit=10):
             conn.execute(outbox.update().where(outbox.c.id==job['id']).values(status=result['status']))
             log(conn,job['merchant_id'],'sms.'+result['status'],job['id'],result.get('error',''))
             counts['processed']+=1
+            if result['status']=='live_accepted':counts['live_accepted']+=1
     return counts
 
 async def run_once(app):
     verification=await process_webhooks(app)
+    from .provider_finance import process_finance_events
+    finance=await process_finance_events(app)
     from .sms_callbacks import process_callbacks
     delivery_reports=await process_callbacks(app)
     created=0
@@ -184,7 +184,8 @@ async def run_once(app):
         if ids:
             conn.execute(turns.delete().where(turns.c.conversation_id.in_(ids)))
             conn.execute(conversations.delete().where(conversations.c.id.in_(ids)))
-    return {'webhooks':verification,'sms_callbacks':delivery_reports,'previews_created':created,'sms':sms,'real_messages_sent':0}
+    return {'webhooks':verification,'provider_finance':finance,'sms_callbacks':delivery_reports,'previews_created':created,
+        'sms':sms,'real_messages_sent':sms.get('live_accepted',0)}
 
 async def worker_loop(app):
     while True:

@@ -506,6 +506,36 @@ async function renderPage() {
         "Integration status and prototype boundaries.",
       ) +
       `<div class="status-grid"><section class="panel"><div class="panel-head"><h2>Connections</h2></div><div class="panel-body"><div class="setting-line"><div><h3>Gemini agent</h3><p>${esc(config.gemini_model)} · server-side API</p></div>${badge(config.gemini_configured ? "configured" : "not_configured")}</div><div class="setting-line"><div><h3>Paystack test checkout</h3><p>Test keys only. Live payments are blocked.</p></div>${badge(config.paystack_test_configured ? "configured" : "not_configured")}</div><div class="setting-line"><div><h3>SMS reminders</h3><p>Sandbox acceptance is not handset delivery.</p></div>${badge(config.sms_mode)}</div><div class="setting-line"><div><h3>Background processing</h3><p>Durable verification and reminder jobs.</p></div>${badge(config.background_worker ? "enabled" : "external_worker_needed")}</div><div class="setting-line"><div><h3>Demo payment simulator</h3><p>For fictional records only.</p></div>${badge(config.demo_mode ? "enabled" : "disabled")}</div></div></section><section class="panel"><div class="panel-head"><h2>Set up your integrations</h2></div><div class="panel-body"><p class="subtle small">Add credentials to the server’s <code>.env</code> file and restart. Keep API keys out of frontend code.</p><div class="info">Gemini: <code>GEMINI_API_KEY</code><br>Test payments: <code>PAYSTACK_SECRET_KEY</code> and <code>PAYSTACK_TEST_EMAIL</code><br>SMS sandbox: <code>ARKESEL_API_KEY</code>, <code>SMS_MODE=arkesel_sandbox</code><br>Worker: <code>RUN_BACKGROUND_WORKER=true</code></div><p class="small subtle">For shared deployment, configure HTTPS, secure cookies, a matching public URL, and a persistent database. See the included setup guide.</p><div class="info warning">Unallocated customer credit: <strong>GH₵ ${cash(summary.unallocated_minor)}</strong>. This can arise if two pending payments settle against the same debt. Review it before any manual refund.</div></div></section></div>`;
+    const paystackHeading = Array.from($$(".setting-line h3", c)).find(
+      (h) => h.textContent === "Paystack test checkout",
+    );
+    if (paystackHeading && config.paystack_live_configured) {
+      paystackHeading.textContent = "Paystack live collection";
+      paystackHeading.nextElementSibling.textContent =
+        "Real MoMo collection requires an active merchant settlement subaccount.";
+    }
+    if (config.paystack_test_configured || config.paystack_live_configured) {
+      const settlement = await api("/integrations/paystack/subaccount");
+      c.insertAdjacentHTML(
+        "beforeend",
+        settlement.account
+          ? `<section class="panel section-gap"><div class="panel-head"><div><h2>Paystack settlement account</h2><p class="subtle">Only masked settlement details are stored locally.</p></div>${badge(settlement.account.status)}</div><div class="record-card"><p><strong>${esc(settlement.account.business_name)}</strong></p><p class="small subtle">${esc(settlement.account.account_name)} · ${esc(settlement.account.settlement_bank)} · ending ${esc(settlement.account.account_last4)}</p><p class="small subtle">Environment: ${esc(settlement.account.domain)}</p><button class="btn secondary tiny" id="refresh-subaccount">Refresh provider status</button></div></section>`
+          : `<section class="panel form-panel section-gap"><div class="panel-head"><div><h2>Link Paystack settlement account</h2><p class="subtle">The full account number is sent directly to Paystack and is not stored by Sika Ledger.</p></div></div><form id="subaccount-form">${field("Business name", "business_name", "text", user.name, 'required minlength="2" maxlength="100"')}${field("Paystack settlement bank or MoMo code", "settlement_bank", "text", "", 'required minlength="2" maxlength="30" pattern="[A-Za-z0-9_-]+"')}${field("Settlement account or MoMo number", "account_number", "text", "", 'required minlength="6" maxlength="30" inputmode="numeric" pattern="[0-9]+" autocomplete="off"')}${field("Contact name", "contact_name", "text", user.name, 'maxlength="100"')}${field("Contact email", "contact_email", "email", "", 'maxlength="254" autocomplete="email"')}${field("Contact phone", "contact_phone", "tel", "", 'maxlength="30" autocomplete="tel"')}<label class="check"><input type="checkbox" name="confirmed" value="true" required><span>I verified the settlement destination and authorize Paystack to settle this business’s payments there.</span></label><div class="form-error" role="alert"></div><button class="btn" type="submit">Create Paystack subaccount</button></form></section>`,
+      );
+      if ($("#subaccount-form"))
+        bindForm("#subaccount-form", async (data) => {
+          data.confirmed = data.confirmed === "true";
+          await api("/integrations/paystack/subaccount", "POST", data);
+          toast("Settlement account linked. Review its provider status.");
+          await renderPage();
+        });
+      if ($("#refresh-subaccount"))
+        $("#refresh-subaccount").onclick = async () => {
+          await api("/integrations/paystack/subaccount/refresh", "POST", {});
+          toast("Settlement status refreshed.");
+          await renderPage();
+        };
+    }
     const jobs = await api("/integrations/webhooks");
     c.insertAdjacentHTML(
       "beforeend",
@@ -906,6 +936,41 @@ function susuEntry(id) {
     toast("Savings activity recorded. No funds transferred.");
   });
 }
+function addLiveCheckout(selectId, buttonSelector, liveLabel) {
+  if (!config.paystack_live_configured) return;
+  const select = $(selectId);
+  if (!select) return;
+  select.insertAdjacentHTML(
+    "beforeend",
+    '<option value="paystack_live">Paystack LIVE MoMo — real money</option>',
+  );
+  select.closest(".field").insertAdjacentHTML(
+    "afterend",
+    field(
+      "Email for the Paystack receipt",
+      "email",
+      "email",
+      "",
+      'maxlength="254" autocomplete="email"',
+    ),
+  );
+  const email = $("#f-email");
+  const group = email.closest(".field");
+  const button = $(buttonSelector);
+  const sync = () => {
+    const live = select.value === "paystack_live";
+    group.hidden = !live;
+    email.disabled = !live;
+    email.required = live;
+    if (button)
+      button.innerHTML = live
+        ? `${liveLabel} ${icon("arrow")}`
+        : button.dataset.defaultLabel;
+  };
+  if (button) button.dataset.defaultLabel = button.innerHTML;
+  select.addEventListener("change", sync);
+  sync();
+}
 async function paymentPage(token) {
   const d = await api("/public/" + encodeURIComponent(token));
   app.innerHTML = `<main class="public-wrap">${brand()}<article class="public-card"><div class="record-meta"><span class="eyebrow">Private payment page</span>${badge(d.status)}</div><h1>${esc(d.business_name)}</h1><p class="subtle small">For ${esc(d.name)} · ${esc(d.description)}</p><div class="detail-amount"><small>GH₵</small> ${cash(d.balance_minor)}</div><p class="subtle small">Outstanding · Original due date ${fmtdate(d.due_date)}</p><dl class="detail-list section-gap"><div><dt>Original sale</dt><dd>GH₵ ${cash(d.principal_minor)}</dd></div><div><dt>Repayments recorded</dt><dd>GH₵ ${cash(d.paid_minor)}</dd></div></dl><div class="info warning">Test environment. No real money moves through this prototype. Never share a MoMo PIN, password or OTP here.</div>${d.disputed ? '<div class="info">This balance is under review. New checkout and reminders are suspended.</div>' : d.balance_minor > 0 ? `<form id="checkout-form">${field("How much would you like to pay? (GHS)", "amount", "number", String(d.balance_minor / 100), 'required min="0.01" step="0.01" max="' + d.balance_minor / 100 + '"')}<div class="field"><label for="pay-mode">Test payment method</label><select id="pay-mode" name="mode">${config.demo_mode ? '<option value="simulation">Demo simulator — no money moves</option>' : ""}${config.paystack_test_configured ? '<option value="paystack_test">Paystack TEST MoMo checkout</option>' : ""}</select></div><div class="form-error" role="alert"></div><button type="submit" class="btn" ${!config.demo_mode && !config.paystack_test_configured ? "disabled" : ""}>${config.demo_mode ? "Start test repayment" : "Continue to test checkout"} ${icon("arrow")}</button></form>` : '<div class="info">This debt is settled. Thank you.</div>'}<button class="text-btn section-gap" id="dispute-link">Incorrect balance or wrong number?</button><h3 class="section-gap">Repayment acknowledgements</h3>${d.receipts.length ? d.receipts.map((p) => `<div class="ledger-item"><div><p>GH₵ ${cash(p.amount_minor)} · ${esc(p.source.replaceAll("_", " "))}</p><small>${esc(p.status)} · ${p.date ? fmtdate(p.date) : ""}</small>${p.unallocated_minor ? `<p class="small">GH₵ ${cash(p.unallocated_minor)} credit requires business review.</p>` : ""}</div><div><span class="mono">${esc(p.id.slice(0, 8))}</span><br><a class="muted-link" href="/api/public/${token}/receipts/${p.id}/pdf">Download PDF acknowledgement</a></div></div>`).join("") : '<p class="small subtle">Your acknowledgement will appear after a payment is recorded or verified.</p>'}</article><p class="public-footer">A private link for this debt only. No account or app installation required.<br>Sika Ledger prototype · Ghana cedis (GHS)</p></main>`;
@@ -915,6 +980,11 @@ async function paymentPage(token) {
       `<p class="business-contact"><strong>Business contact:</strong> ${esc(d.business_contact)}</p>`,
     );
   }
+  addLiveCheckout(
+    "#pay-mode",
+    "#checkout-form button[type=submit]",
+    "Continue to secure MoMo checkout",
+  );
   $(".public-footer").insertAdjacentHTML(
     "beforeend",
     '<br><a href="/privacy">Privacy notice</a>',
@@ -1000,6 +1070,11 @@ async function contributionPage(token) {
       `<p class="business-contact"><strong>Business contact:</strong> ${esc(d.business_contact)}</p>`,
     );
   }
+  addLiveCheckout(
+    "#contribution-mode",
+    "#contribution-form button[type=submit]",
+    "Continue to secure MoMo contribution",
+  );
   $(".public-footer").insertAdjacentHTML(
     "beforeend",
     '<br><a href="/privacy">Privacy notice</a>',

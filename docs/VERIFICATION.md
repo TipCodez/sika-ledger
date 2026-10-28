@@ -1,10 +1,10 @@
 # Verification record
 
-Date: 27 October 2026. Version: 0.4.0.
+Date: 28 October 2026. Version: 0.4.0.
 
 ## Passed
 
-- **131 pytest cases**, all passed. The suite includes parametrized invalid-money
+- **140 pytest cases**, all passed. The suite includes parametrized invalid-money
   inputs, partial repayments, duplicate requests, reversals, concurrent duplicate
   confirmation, excess credit, tenant isolation, public-link scope, disputes,
   reminder invalidation, susu payout limits, CSV formula escaping, origin checks,
@@ -31,6 +31,11 @@ Date: 27 October 2026. Version: 0.4.0.
   entry points and disclosure of the prototype's retention limitation. Public
   business-contact cases cover debt and susu pages, branding-name fallback and
   non-disclosure of the configured address and document footer.
+  Live-foundation cases cover production startup guards, masked Paystack
+  subaccount storage, merchant-scoped live checkout and non-sandbox SMS payloads.
+  Provider-finance cases cover refund request idempotency, ambiguous outcomes,
+  processed-event ledger effects, overpayment-credit ordering, duplicate webhook
+  replay, dispute pause/resolution and settlement transaction matching.
   PostgreSQL is explicitly rejected by the SQLite
   recovery tool.
 - JavaScript syntax check completed successfully.

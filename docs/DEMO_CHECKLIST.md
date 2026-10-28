@@ -13,6 +13,9 @@ the final rehearsal. Do not delete valuable records to make room for samples.
 
 ## Debt and payments
 
+- [ ] Live mode refuses startup without every approval, HTTPS and secure-cookie guard.
+- [ ] Link a Paystack subaccount; confirm only its resolved name and last four digits are stored.
+- [ ] Live checkout requires a receipt email and routes to the matching merchant subaccount.
 - [ ] Record GH₵500 due on a chosen date.
 - [ ] Starting GH₵200 checkout leaves the balance at GH₵500.
 - [ ] Confirm the simulator: balance becomes GH₵300 and source says simulation.
@@ -28,6 +31,7 @@ the final rehearsal. Do not delete valuable records to make room for samples.
 
 ## Customer page and reminders
 
+- [ ] Live SMS remains unavailable without the approved sender-ID guard and contact consent.
 - [ ] Open `/privacy` while signed out; the notice is readable without an account.
 - [ ] Sign-in, debt payment and susu contribution screens all link to the notice.
 - [ ] Confirm the notice discloses test providers and the lack of automatic deletion for core records.

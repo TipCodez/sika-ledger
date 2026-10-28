@@ -68,6 +68,7 @@ def confirm_contribution(conn,reference):
         return {'duplicate':True,'payment_id':p['id'],'savings_balance_minor':savings_balance(conn,account['id'])}
     if p['status']!='pending':raise HTTPException(409,'Contribution cannot be confirmed.')
     note=('SIMULATED contribution — no funds transferred.' if p['source']=='simulation'
+          else 'Paystack server-verified LIVE contribution.' if p['source']=='paystack_live'
           else 'Paystack server-verified TEST contribution — no real funds transferred.')
     conn.execute(contributions.insert().values(id=uid(),merchant_id=p['merchant_id'],
         account_id=account['id'],amount_minor=p['amount_minor'],kind='contribution',

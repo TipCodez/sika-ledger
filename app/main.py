@@ -72,8 +72,12 @@ class PaymentIn(Strict):
 
 class CheckoutIn(Strict):
     amount: str = Field(max_length=20)
-    mode: Literal['simulation','paystack_test'] = 'simulation'
+    mode: Literal['simulation','paystack_test','paystack_live'] = 'simulation'
     idempotency_key: str = Field(min_length=8,max_length=100,pattern=r'^[a-zA-Z0-9_-]+$')
+    email: str|None = Field(default=None,max_length=254,pattern=r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+    @field_validator('email',mode='before')
+    @classmethod
+    def blank_email(cls,value):return None if value in (None,'') else value
 
 class DisputeIn(Strict):
     reason: Literal['incorrect_balance','wrong_number','other']
@@ -111,21 +115,34 @@ def create_app(database_url=None, overrides=None):
         'gemini_key':os.getenv('GEMINI_API_KEY',''),'gemini_model':os.getenv('GEMINI_MODEL','gemini-3.8-flash'),
         'paystack_key':os.getenv('PAYSTACK_SECRET_KEY',''),
         'paystack_email':os.getenv('PAYSTACK_TEST_EMAIL',''),
+        'enable_live_payments':os.getenv('ENABLE_LIVE_PAYMENTS','false').lower()=='true',
+        'paystack_account_approved':os.getenv('PAYSTACK_LIVE_ACCOUNT_APPROVED','false').lower()=='true',
         'reminder_start':int(os.getenv('REMINDER_START_HOUR','9')),
         'reminder_end':int(os.getenv('REMINDER_END_HOUR','18')),
         'sms_mode':os.getenv('SMS_MODE','dry_run'),
         'arkesel_key':os.getenv('ARKESEL_API_KEY',''),
         'sms_sender':os.getenv('SMS_SENDER_ID','SikaLedger'),
+        'enable_live_sms':os.getenv('ENABLE_LIVE_SMS','false').lower()=='true',
+        'sms_sender_approved':os.getenv('ARKESEL_SENDER_ID_APPROVED','false').lower()=='true',
         'arkesel_callbacks':os.getenv('ARKESEL_CALLBACKS_ENABLED','false').lower()=='true',
         'automatic_reminders':os.getenv('AUTOMATIC_REMINDERS','false').lower()=='true',
         'worker_enabled':os.getenv('RUN_BACKGROUND_WORKER','false').lower()=='true'}
     settings.update(overrides or {})
-    if settings['sms_mode'] not in ('dry_run','arkesel_sandbox'):
-        raise RuntimeError('SMS_MODE must be dry_run or arkesel_sandbox. Live SMS is blocked in this prototype.')
+    if settings['sms_mode'] not in ('dry_run','arkesel_sandbox','arkesel_live'):
+        raise RuntimeError('Live SMS is blocked unless SMS_MODE=arkesel_live is used with every production approval guard.')
+    if settings['sms_mode']=='arkesel_live' and not(settings['enable_live_sms'] and settings['sms_sender_approved']
+        and settings['arkesel_key'] and settings['secure_cookie'] and settings['base_url'].startswith('https://')):
+        raise RuntimeError('Live SMS requires ENABLE_LIVE_SMS=true, approved sender ID, API key, HTTPS and secure cookies.')
     if not 0 <= settings['reminder_start'] < settings['reminder_end'] <= 24:
         raise RuntimeError('Reminder hours must satisfy 0 <= start < end <= 24.')
-    if settings['paystack_key'] and not settings['paystack_key'].startswith('sk_test_'):
-        raise RuntimeError('This prototype accepts Paystack TEST keys only; live payment keys are blocked.')
+    paystack_key=settings['paystack_key']
+    if paystack_key and not paystack_key.startswith(('sk_test_','sk_live_')):
+        raise RuntimeError('PAYSTACK_SECRET_KEY must be a Paystack test or live secret key.')
+    if paystack_key.startswith('sk_live_') and not(settings['enable_live_payments'] and settings['paystack_account_approved']):
+        raise RuntimeError('TEST keys only unless ENABLE_LIVE_PAYMENTS=true and PAYSTACK_LIVE_ACCOUNT_APPROVED=true are deliberately configured.')
+    if settings['enable_live_payments'] and not(paystack_key.startswith('sk_live_') and settings['paystack_account_approved']
+        and settings['secure_cookie'] and settings['base_url'].startswith('https://')):
+        raise RuntimeError('Live payments require an approved live key, HTTPS PUBLIC_BASE_URL and COOKIE_SECURE=true.')
     engine = make_engine(settings['database_url'])
     from .access import bootstrap_owners,identity,authorize,actor_context
     bootstrap_owners(engine)
@@ -209,7 +226,8 @@ def create_app(database_url=None, overrides=None):
         d=owned_debt(conn,p['merchant_id'],p['debt_id'])
         business=conn.scalar(select(merchants.c.name).where(merchants.c.id==p['merchant_id']))
         customer=conn.scalar(select(customers.c.name).where(customers.c.id==d['customer_id']))
-        mode=('PROVIDER-VERIFIED TEST PAYMENT — NO REAL MONEY MOVED' if p['source']=='paystack_test'
+        mode=('PROVIDER-VERIFIED LIVE PAYMENT' if p['source']=='paystack_live'
+            else 'PROVIDER-VERIFIED TEST PAYMENT — NO REAL MONEY MOVED' if p['source']=='paystack_test'
             else 'SIMULATED PAYMENT — NO REAL MONEY MOVED' if p['source']=='simulation'
             else 'TRADER-REPORTED PAYMENT — NOT PROVIDER VERIFIED')
         body='\n'.join(['SIKA LEDGER — REPAYMENT ACKNOWLEDGEMENT',mode,'',
@@ -221,9 +239,12 @@ def create_app(database_url=None, overrides=None):
             f"Originally allocated to this debt: GHS {p['applied_minor']/100:.2f}",
             f"Current unallocated credit: GHS {p['unallocated_minor']/100:.2f}",
             f"Current debt balance at download: GHS {balance(conn,d['id'])/100:.2f}",
-            '','REVERSED: this payment no longer reduces the debt.' if p['status']=='reversed' else '',
+            '',('REFUNDED: Paystack confirmed that all of this payment was refunded.' if p['status']=='refunded'
+                else 'PARTIALLY REFUNDED: the current debt balance includes the provider-confirmed refund.'
+                if p['status']=='partially_refunded' else
+                'REVERSED: this payment no longer reduces the debt.' if p['status']=='reversed' else ''),
             'This is a prototype account acknowledgement, not a tax invoice.',
-            'Ledger reversal does not itself refund or transfer money.',''])
+            'Only a Paystack-confirmed processed refund changes a provider payment in this ledger.',''])
         return Response(body,media_type='text/plain',headers={
             'Content-Disposition':f'attachment; filename="repayment-{p["id"]}.txt"'})
 
@@ -239,7 +260,8 @@ def create_app(database_url=None, overrides=None):
             'open_debts':sum(d['balance_minor']>0 for d in ds),
             'customers':conn.scalar(select(func.count()).select_from(customers).where(customers.c.merchant_id==merchant)),
             'unallocated_minor':conn.scalar(select(func.coalesce(func.sum(payments.c.unallocated_minor),0))
-                .where(payments.c.merchant_id==merchant,payments.c.status=='confirmed'))}
+                .where(payments.c.merchant_id==merchant,
+                    payments.c.status.in_(['confirmed','partially_refunded'])))}
 
     @app.get('/api/health')
     def health():return {'status':'ok','version':'0.4.0','prototype':True}
@@ -247,6 +269,7 @@ def create_app(database_url=None, overrides=None):
     @app.get('/api/config')
     def config():return {'demo_mode':settings['demo'],'gemini_configured':bool(settings['gemini_key']),
         'gemini_model':settings['gemini_model'],'paystack_test_configured':bool(settings['paystack_key'] and settings['paystack_email']),
+        'paystack_live_configured':bool(settings['enable_live_payments'] and settings['paystack_key'].startswith('sk_live_')),
         'sms_mode':settings['sms_mode'],'sms_configured':bool(settings['arkesel_key']),
         'background_worker':settings['worker_enabled'],'automatic_reminders':settings['automatic_reminders'],
         'arkesel_callbacks':settings['arkesel_callbacks'],
@@ -338,7 +361,7 @@ def create_app(database_url=None, overrides=None):
     def merchant_receipt(pid:str,m=Depends(current)):
         with engine.connect() as conn:
             p=conn.execute(select(payments).where(payments.c.id==pid,
-                payments.c.merchant_id==m['id'],payments.c.status.in_(['confirmed','reversed']))).mappings().first()
+                payments.c.merchant_id==m['id'],payments.c.status.in_(['confirmed','reversed','partially_refunded','refunded']))).mappings().first()
             if not p:raise HTTPException(404,'Acknowledgement not found.')
             return acknowledgement(conn,p)
 
@@ -347,7 +370,7 @@ def create_app(database_url=None, overrides=None):
         with engine.connect() as conn:
             d=public_debt(conn,token)
             p=conn.execute(select(payments).where(payments.c.id==pid,
-                payments.c.debt_id==d['id'],payments.c.status.in_(['confirmed','reversed']))).mappings().first()
+                payments.c.debt_id==d['id'],payments.c.status.in_(['confirmed','reversed','partially_refunded','refunded']))).mappings().first()
             if not p:raise HTTPException(404,'Acknowledgement not found.')
             return acknowledgement(conn,p)
 
@@ -388,7 +411,7 @@ def create_app(database_url=None, overrides=None):
                 'applied_minor':p['applied_minor'],'unallocated_minor':p['unallocated_minor'],
                 'status':p['status'],'source':p['source'],'date':p['confirmed_at']}
                 for p in conn.execute(select(payments).where(payments.c.debt_id==d['id'],
-                    payments.c.status.in_(['confirmed','reversed']))).mappings()]
+                    payments.c.status.in_(['confirmed','reversed','partially_refunded','refunded']))).mappings()]
             return result
 
     @app.post('/api/public/{token}/dispute')
@@ -434,8 +457,16 @@ def create_app(database_url=None, overrides=None):
         if data.mode=='simulation' and not settings['demo']:raise HTTPException(403,'Payment simulation is disabled.')
         if data.mode=='paystack_test' and not(settings['paystack_key'] and settings['paystack_email']):
             raise HTTPException(503,'Configure PAYSTACK_SECRET_KEY (test only) and PAYSTACK_TEST_EMAIL first.')
+        if data.mode=='paystack_live' and not settings['enable_live_payments']:
+            raise HTTPException(503,'Live Paystack collection is not enabled.')
+        if data.mode=='paystack_live' and not data.email:
+            raise HTTPException(422,'An email address is required for a live Paystack receipt.')
         with write(engine) as conn:
             d=public_debt(conn,token,True)
+            subaccount=None
+            if data.mode=='paystack_live':
+                from .provider_accounts import active_subaccount
+                subaccount=active_subaccount(conn,d['merchant_id'],'live')
             ref='sika-'+d['id']+'-'+data.idempotency_key
             prior=conn.execute(select(payments).where(payments.c.reference==ref)).mappings().first()
             if prior:
@@ -454,11 +485,14 @@ def create_app(database_url=None, overrides=None):
         if data.mode=='simulation':return {'reference':ref,'mode':'simulation','status':'pending'}
         try:
             async with httpx.AsyncClient(timeout=20) as client:
+                payload={'reference':ref,'amount':amount,'currency':'GHS',
+                    'email':data.email if data.mode=='paystack_live' else settings['paystack_email'],
+                    'channels':['mobile_money'], 'metadata':{'debt_id':d['id'],'merchant_id':d['merchant_id']},
+                    'callback_url':settings['base_url']+'/pay/'+token}
+                if subaccount:
+                    payload.update(subaccount=subaccount['subaccount_code'],bearer='subaccount')
                 r=await client.post('https://api.paystack.co/transaction/initialize',
-                    headers={'Authorization':'Bearer '+settings['paystack_key']},json={
-                        'reference':ref,'amount':amount,'currency':'GHS','email':settings['paystack_email'],
-                        'channels':['mobile_money'], 'metadata':{'debt_id':d['id'],'merchant_id':d['merchant_id']},
-                        'callback_url':settings['base_url']+'/pay/'+token})
+                    headers={'Authorization':'Bearer '+settings['paystack_key']},json=payload)
             r.raise_for_status()
             body=r.json()
             if not body.get('status'):raise ValueError()
@@ -470,7 +504,7 @@ def create_app(database_url=None, overrides=None):
         except (httpx.HTTPError,ValueError,KeyError):
             with write(engine) as conn:
                 log(conn,d['merchant_id'],'checkout.initialization_uncertain',d['id'],ref)
-            raise HTTPException(502,'Test checkout could not be started. No balance was changed. Retry with a new checkout.')
+            raise HTTPException(502,'Checkout could not be started. No balance was changed. Retry with a new checkout.')
 
     @app.post('/api/public/{token}/simulate/{reference}')
     def simulate(token:str,reference:str):
@@ -500,7 +534,7 @@ def create_app(database_url=None, overrides=None):
                 p=conn.execute(select(susu_payments).where(susu_payments.c.reference==reference)).mappings().first()
                 is_savings=True
             if not p:raise HTTPException(404,'Unknown payment reference.')
-            if p['source']!='paystack_test':raise HTTPException(409,'Incorrect payment source.')
+            if p['source'] not in ('paystack_test','paystack_live'):raise HTTPException(409,'Incorrect payment source.')
             metadata=verified.get('metadata') or {}
             if isinstance(metadata,str):
                 try:metadata=json.loads(metadata)
@@ -509,13 +543,16 @@ def create_app(database_url=None, overrides=None):
             if target_matches:
                 target_matches=(metadata.get('purpose')=='susu_contribution' and metadata.get('account_id')==p['account_id']
                     if is_savings else metadata.get('debt_id')==p['debt_id'])
+            expected_domain='live' if p['source']=='paystack_live' else 'test'
             if (verified.get('reference')!=reference or verified.get('amount')!=p['amount_minor']
-                or verified.get('currency')!='GHS' or verified.get('domain')!='test'
+                or verified.get('currency')!='GHS' or verified.get('domain')!=expected_domain
                 or not target_matches):
-                raise HTTPException(409,'Provider transaction does not match the expected test payment.')
+                raise HTTPException(409,'Provider transaction does not match the expected payment.')
             if verified.get('status')!='success':return {'status':verified.get('status','pending'),'balance_unchanged':True}
             if is_savings:return savings.confirm_contribution(conn,reference)
-            return confirm_payment(conn,reference,'Paystack server-verified TEST payment. No real money moved.')
+            note=('Paystack server-verified LIVE payment.' if expected_domain=='live'
+                else 'Paystack server-verified TEST payment. No real money moved.')
+            return confirm_payment(conn,reference,note)
 
     app.state.verify_paystack=verify_paystack
 
@@ -539,7 +576,9 @@ def create_app(database_url=None, overrides=None):
         try:event=json.loads(raw)
         except ValueError:raise HTTPException(400,'Invalid webhook payload.')
         if not isinstance(event,dict):raise HTTPException(400,'Invalid webhook payload.')
-        if event.get('event')!='charge.success':return {'received':True,'ignored':True}
+        if event.get('event')!='charge.success':
+            from .provider_finance import queue_finance_event
+            with write(engine) as conn:return queue_finance_event(conn,event)
         event_data=event.get('data')
         if not isinstance(event_data,dict):raise HTTPException(400,'Invalid transaction data.')
         ref=event_data.get('reference','')
@@ -548,10 +587,10 @@ def create_app(database_url=None, overrides=None):
         # Acknowledge only after durable storage; verification runs in the worker.
         with write(engine) as conn:
             p=conn.execute(select(payments).where(payments.c.reference==ref,
-                payments.c.source=='paystack_test').with_for_update()).mappings().first()
+                payments.c.source.in_(['paystack_test','paystack_live'])).with_for_update()).mappings().first()
             if not p:
                 p=conn.execute(select(susu_payments).where(susu_payments.c.reference==ref,
-                    susu_payments.c.source=='paystack_test').with_for_update()).mappings().first()
+                    susu_payments.c.source.in_(['paystack_test','paystack_live'])).with_for_update()).mappings().first()
             if not p:return {'received':True,'ignored':True}
             key='charge.success:'+ref
             existing=conn.execute(select(webhook_inbox).where(webhook_inbox.c.event_key==key)).mappings().first()
@@ -850,8 +889,16 @@ def create_app(database_url=None, overrides=None):
         if data.mode=='simulation' and not settings['demo']:raise HTTPException(403,'Simulation is disabled.')
         if data.mode=='paystack_test' and not(settings['paystack_key'] and settings['paystack_email']):
             raise HTTPException(503,'Configure the Paystack test key and test email first.')
+        if data.mode=='paystack_live' and not settings['enable_live_payments']:
+            raise HTTPException(503,'Live Paystack collection is not enabled.')
+        if data.mode=='paystack_live' and not data.email:
+            raise HTTPException(422,'An email address is required for a live Paystack receipt.')
         with write(engine) as conn:
             a=savings.public_account(conn,token,True)
+            subaccount=None
+            if data.mode=='paystack_live':
+                from .provider_accounts import active_subaccount
+                subaccount=active_subaccount(conn,a['merchant_id'],'live')
             ref='sika-susu-'+a['id']+'-'+data.idempotency_key
             previous=conn.execute(select(susu_payments).where(susu_payments.c.reference==ref)).mappings().first()
             if previous:
@@ -865,12 +912,15 @@ def create_app(database_url=None, overrides=None):
         if data.mode=='simulation':return {'reference':ref,'mode':'simulation','status':'pending'}
         try:
             async with httpx.AsyncClient(timeout=20) as client:
+                payload={'reference':ref,'amount':amount,'currency':'GHS',
+                    'email':data.email if data.mode=='paystack_live' else settings['paystack_email'],
+                    'channels':['mobile_money'],'metadata':{'purpose':'susu_contribution',
+                        'account_id':a['id'],'merchant_id':a['merchant_id']},
+                    'callback_url':settings['base_url']+'/contribute/'+token}
+                if subaccount:
+                    payload.update(subaccount=subaccount['subaccount_code'],bearer='subaccount')
                 response=await client.post('https://api.paystack.co/transaction/initialize',
-                    headers={'Authorization':'Bearer '+settings['paystack_key']},json={
-                        'reference':ref,'amount':amount,'currency':'GHS','email':settings['paystack_email'],
-                        'channels':['mobile_money'],'metadata':{'purpose':'susu_contribution',
-                            'account_id':a['id'],'merchant_id':a['merchant_id']},
-                        'callback_url':settings['base_url']+'/contribute/'+token})
+                    headers={'Authorization':'Bearer '+settings['paystack_key']},json=payload)
             response.raise_for_status();body=response.json()
             if not body.get('status'):raise ValueError()
             url=body['data']['authorization_url']
@@ -880,7 +930,7 @@ def create_app(database_url=None, overrides=None):
             return {'reference':ref,'mode':data.mode,'status':'pending','authorization_url':url}
         except (httpx.HTTPError,ValueError,KeyError):
             with write(engine) as conn:log(conn,a['merchant_id'],'susu.checkout_uncertain',a['id'],ref)
-            raise HTTPException(502,'Test contribution checkout could not be started. Savings balance is unchanged.')
+            raise HTTPException(502,'Contribution checkout could not be started. Savings balance is unchanged.')
 
     @app.post('/api/susu-public/{token}/simulate/{reference}')
     def simulate_contribution(token:str,reference:str):
@@ -897,7 +947,8 @@ def create_app(database_url=None, overrides=None):
         with engine.connect() as conn:
             a=savings.public_account(conn,token)
             p=conn.execute(select(susu_payments).where(susu_payments.c.account_id==a['id'],
-                susu_payments.c.reference==reference,susu_payments.c.source=='paystack_test')).mappings().first()
+                susu_payments.c.reference==reference,
+                susu_payments.c.source.in_(['paystack_test','paystack_live']))).mappings().first()
             if not p:raise HTTPException(404,'Contribution reference not found.')
         return await verify_paystack(reference)
 
@@ -940,6 +991,10 @@ def create_app(database_url=None, overrides=None):
     register_operations(app,engine,current,all_debts)
     from .workspace import register_workspace
     register_workspace(app,engine,current,all_debts)
+    from .provider_accounts import register_provider_accounts
+    register_provider_accounts(app,engine,current)
+    from .provider_finance import register_provider_finance
+    register_provider_finance(app,engine,current)
     from .pdf_documents import register_documents
     register_documents(app,engine,current)
     app.mount('/static',StaticFiles(directory=STATIC),name='static')
