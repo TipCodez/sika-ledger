@@ -128,7 +128,7 @@ function field(label, name, type = "text", value = "", extra = "") {
 }
 function auth(register = false) {
   page = "overview";
-  app.innerHTML = `<div class="auth"><section class="auth-art">${brand()}<div><div class="eyebrow">Made for everyday business</div><h1>Your debt book.<br>A little smarter.</h1><p>Keep track of what you’re owed, follow up kindly, and see every repayment in one place.</p><div class="auth-orbit"><div class="row"><span class="eyebrow">An example account</span>${badge("paid")}</div><div class="row"><strong>GH₵ 500.00</strong><span>✓</span></div><p>A clear record. A friendly reminder. One less thing to remember.</p></div></div><div class="auth-bottom"><span>Built for Ghanaian businesses</span><span>Prototype · 2026</span></div></section><main class="auth-main"><div class="auth-box"><span class="mode">WORKING PROTOTYPE · TEST PAYMENTS</span><h2 class="auth-title">${register ? "Start your debt book" : "Welcome back"}</h2><p>${register ? "Create a business account to get started." : "Sign in to see how your business is doing."}</p><form id="auth-form">${register ? field("Business name", "name", "text", "", 'required maxlength="100" autocomplete="organization"') : ""}${field("Login name", "login", "text", "", 'required minlength="3" maxlength="100" autocomplete="username"')}${field("Password", "password", "password", "", 'required minlength="10" maxlength="128" autocomplete="' + (register ? "new-password" : "current-password") + '"')}<div class="form-error" role="alert"></div><button type="submit" class="btn">${register ? "Create business account" : "Sign in"} ${icon("arrow")}</button></form><div class="auth-toggle">${register ? "Already have an account?" : "New here?"} <button class="text-btn" id="auth-toggle">${register ? "Sign in" : "Create an account"}</button></div><div class="info small">Use fictional customer data while testing. This prototype uses test payments and dry-run or sandbox SMS.</div></div></main></div>`;
+  app.innerHTML = `<div class="auth"><section class="auth-art">${brand()}<div><div class="eyebrow">Made for everyday business</div><h1>Your debt book.<br>A little smarter.</h1><p>Keep track of what you’re owed, follow up kindly, and see every repayment in one place.</p><div class="auth-orbit"><div class="row"><span class="eyebrow">An example account</span>${badge("paid")}</div><div class="row"><strong>GH₵ 500.00</strong><span>✓</span></div><p>A clear record. A friendly reminder. One less thing to remember.</p></div></div><div class="auth-bottom"><span>Built for Ghanaian businesses</span><span>Ghana cedis · GHS</span></div></section><main class="auth-main"><div class="auth-box"><h2 class="auth-title">${register ? "Start your debt book" : "Welcome back"}</h2><p>${register ? "Create a business account to get started." : "Sign in to see how your business is doing."}</p><form id="auth-form">${register ? field("Business name", "name", "text", "", 'required maxlength="100" autocomplete="organization"') : ""}${field("Login name", "login", "text", "", 'required minlength="3" maxlength="100" autocomplete="username"')}${field("Password", "password", "password", "", 'required minlength="10" maxlength="128" autocomplete="' + (register ? "new-password" : "current-password") + '"')}<div class="form-error" role="alert"></div><button type="submit" class="btn">${register ? "Create business account" : "Sign in"} ${icon("arrow")}</button></form><div class="auth-toggle">${register ? "Already have an account?" : "New here?"} <button class="text-btn" id="auth-toggle">${register ? "Sign in" : "Create an account"}</button></div></div></main></div>`;
   $(".auth-box").insertAdjacentHTML(
     "beforeend",
     '<p class="privacy-link"><a class="muted-link" href="/privacy">Read the privacy notice</a></p>',
@@ -181,6 +181,7 @@ function shell() {
     .join(
       "",
     )}</nav><div class="side-bottom"><div class="side-note"><h3>Meet your assistant <span>✧</span></h3><p>Turn a quick note into a debt record with Gemini.</p><button class="text-btn" data-agent>Try the assistant →</button></div><nav class="nav"><button data-page="settings">${icon("settings")}Settings</button></nav><div class="profile"><div class="avatar">${esc(initials(user.name))}</div><div><strong class="small">${esc(user.actor_name || user.name)}</strong><div class="subtle small">${esc(user.role)}</div></div><button id="logout" aria-label="Sign out">${icon("logout")}</button></div></div></aside><div class="workspace"><header class="topbar"><div class="breadcrumb"><button class="mobile-menu" aria-label="Open navigation">${icon("menu")}</button><span>Workspace</span><span>/</span><strong id="crumb">${navNames[page]}</strong></div><div class="top-right"><span class="mode">PROTOTYPE · NO LIVE MONEY</span><span class="small subtle">${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span></div></header><main class="content" id="content"></main></div></div>`;
+  $(".top-right .mode")?.remove();
   $$("[data-page]").forEach(
     (b) =>
       (b.onclick = () => {
@@ -318,6 +319,12 @@ async function renderPage() {
       ) +
       stats() +
       `<div class="grid-main"><div class="stack"><section class="panel"><div class="panel-head"><div><h2>Where things stand</h2><p class="subtle">Current balances and net repayments, in Ghana cedis.</p></div><span class="legend"><span class="dot"></span>From your ledger</span></div><div class="panel-body"><div class="collection-chart">${groups.map((g, i) => `<div class="chart-column"><span class="chart-value">${cash(vals[i])}</span><div class="chart-bar" data-height="${Math.max(2, Math.round((vals[i] / max) * 105))}"></div><span>${g}</span></div>`).join("")}</div></div></section>${debtTable(records.slice(0, 5))}</div><div class="stack side-stack"><section class="panel agent-card"><div class="panel-body agent-body"><div class="agent-glyph">✧</div><div class="eyebrow">Gemini assistant</div><h2>A note is all it takes.</h2><p>Describe a credit sale. Review the details. Add it to your debt book.</p><div class="agent-example">“Kofi bought GH₵600 of rice, paid GH₵200, and will pay the rest next Friday.”</div><button class="btn" data-agent>Ask your assistant ${icon("arrow")}</button><p class="small">${config.gemini_configured ? "Connected · confirmation required" : "API key needed · manual entry available"}</p></div></section><section class="panel"><div class="panel-head"><div><h2>Coming up</h2><p class="subtle">Upcoming and overdue repayments</p></div>${icon("reminders")}</div><div class="panel-body mini-list">${due.length ? due.map((d) => `<div class="mini-item"><div class="avatar">${esc(initials(d.name))}</div><div><strong class="small">${esc(d.name)}</strong><br><small>${fmtdate(d.collection_due_date)}</small></div><div class="amount">GH₵ ${cash(d.plan?.status === "active" ? d.plan.next_due_minor : d.balance_minor)}</div></div>`).join("") : '<p class="subtle small">Your repayment schedule will appear here.</p>'}</div></section></div></div><div class="footer-note"><span>Every repayment has a record. Every balance has a history.</span><span>GHS · Africa/Accra · Prototype v0.4</span></div>`;
+    $(".agent-card h2", c).textContent = "Add a credit sale faster";
+    $(".agent-card h2", c).nextElementSibling.textContent =
+      "Describe the sale, review the details, then save it.";
+    const footerParts = $$(".footer-note span", c);
+    footerParts[0].textContent = "Balances update from your ledger.";
+    footerParts[1].textContent = "GHS · Africa/Accra";
     $$("[data-height]").forEach(
       (b) => (b.style.height = b.dataset.height + "px"),
     );
@@ -378,7 +385,7 @@ async function renderPage() {
         "Prepare and track reminder processing around repayment dates.",
         '<button class="btn" id="preview-reminders">Prepare today’s previews</button>',
       ) +
-      `<div class="info warning">No real SMS is sent. Choose a dry run or the configured provider sandbox. Previews are generated one day before the due date, on the due date, and every third overdue day. Settled, paused, disputed, opted-out and review-required plans are excluded. Arkesel sandbox queues require recorded SMS permission for the current number.</div><section class="panel">${rows.length ? rows.map((r) => `<article class="record-card"><div class="record-meta"><span>${fmtdate(r.created_at)}</span>${badge(r.status)}</div><p>${esc(r.body)}</p><span class="small subtle">${r.status === "stale" ? "Balance or contact state changed. Regenerate the preview." : "Not a handset delivery confirmation"}</span>${r.status === "preview" ? `<div class="section-gap"><button class="btn secondary tiny" data-queue-reminder="${r.id}">${config.sms_mode === "dry_run" ? "Queue dry run" : "Queue sandbox submission"}</button></div>` : ""}${(r.attempts || []).map((a) => `<div class="small subtle section-gap">${esc(a.mode)} · ${esc(a.status)}${a.provider_id ? ` · ID ${esc(a.provider_id)}` : ""}${a.error ? `<br>${esc(a.error)}` : ""}${a.delivery_report ? `<br><strong>Sandbox report: ${esc(a.delivery_report.status)}</strong> · authenticated provider lookup` : ""}</div>`).join("")}</article>`).join("") : '<div class="empty"><h3>No reminder previews yet</h3><p>Prepare today’s previews to see eligible messages.</p></div>'}</section>`;
+      `<p class="small subtle page-note">Messages are prepared only for eligible customers who have granted SMS permission.</p><section class="panel">${rows.length ? rows.map((r) => `<article class="record-card"><div class="record-meta"><span>${fmtdate(r.created_at)}</span>${badge(r.status)}</div><p>${esc(r.body)}</p><span class="small subtle">${r.status === "stale" ? "Balance or contact state changed. Prepare a new preview." : config.sms_mode === "arkesel_live" ? "Check the delivery status below." : "Preview or sandbox status"}</span>${r.status === "preview" ? `<div class="section-gap"><button class="btn secondary tiny" data-queue-reminder="${r.id}">${config.sms_mode === "dry_run" ? "Queue dry run" : config.sms_mode === "arkesel_live" ? "Send SMS" : "Queue sandbox message"}</button></div>` : ""}${(r.attempts || []).map((a) => `<div class="small subtle section-gap">${esc(a.mode)} · ${esc(a.status)}${a.provider_id ? ` · ID ${esc(a.provider_id)}` : ""}${a.error ? `<br>${esc(a.error)}` : ""}${a.delivery_report ? `<br><strong>Delivery status: ${esc(a.delivery_report.status)}</strong>` : ""}</div>`).join("")}</article>`).join("") : '<div class="empty"><h3>No reminder previews yet</h3><p>Prepare today’s previews to see eligible messages.</p></div>'}</section>`;
     $$("[data-queue-reminder]").forEach(
       (b) =>
         (b.onclick = async () => {
@@ -391,7 +398,11 @@ async function renderPage() {
             );
             await renderPage();
             toast(
-              "Queued. The worker will process it during reminder hours. No real SMS is sent.",
+              config.sms_mode === "arkesel_live"
+                ? "Queued for SMS delivery during reminder hours."
+                : config.sms_mode === "arkesel_sandbox"
+                  ? "Queued in the SMS sandbox."
+                  : "Dry run queued. No SMS will be sent.",
             );
           } catch (e) {
             toast(e.message);
@@ -453,7 +464,7 @@ async function renderPage() {
         "Payment recovery",
         "Inspect pending checkouts and record reviews of excess payments.",
       ) +
-      `<div class="info">Verification uses the provider API. A review note does not refund, transfer or allocate customer credit.</div><section class="panel">${rows.length ? rows.map((p) => `<article class="record-card"><div class="record-meta"><h3>${esc(p.name)} · ${esc(p.kind)}</h3>${badge(p.status)}</div><p>GH₵ ${cash(p.amount_minor)} · ${esc(p.source.replaceAll("_", " "))}</p><p class="mono">${esc(p.reference)}</p>${p.unallocated_minor ? `<p>Unallocated credit: <strong>GH₵ ${cash(p.unallocated_minor)}</strong></p>` : ""}${p.review ? `<p class="small subtle">Review: ${esc(p.review.note)}</p>` : ""}<div class="button-row">${p.source === "paystack_test" ? `<button class="btn tiny" data-reverify="${p.kind}/${p.id}">Verify with Paystack</button>` : '<span class="small subtle">Simulations must be completed on their private test payment page.</span>'}${p.unallocated_minor ? `<button class="btn secondary tiny" data-review-credit="${p.id}">Record credit review</button>` : ""}</div></article>`).join("") : '<div class="empty"><h3>No pending or excess payments to review</h3></div>'}</section>`;
+      `<p class="small subtle page-note">Review pending payments and unallocated customer credit.</p><section class="panel">${rows.length ? rows.map((p) => `<article class="record-card"><div class="record-meta"><h3>${esc(p.name)} · ${esc(p.kind)}</h3>${badge(p.status)}</div><p>GH₵ ${cash(p.amount_minor)} · ${esc(p.source.replaceAll("_", " "))}</p><p class="mono">${esc(p.reference)}</p>${p.unallocated_minor ? `<p>Unallocated credit: <strong>GH₵ ${cash(p.unallocated_minor)}</strong></p>` : ""}${p.review ? `<p class="small subtle">Review: ${esc(p.review.note)}</p>` : ""}<div class="button-row">${p.source.startsWith("paystack_") ? `<button class="btn tiny" data-reverify="${p.kind}/${p.id}">Verify with Paystack</button>` : '<span class="small subtle">Simulations are completed from the private payment page.</span>'}${p.unallocated_minor ? `<button class="btn secondary tiny" data-review-credit="${p.id}">Record credit review</button>` : ""}</div></article>`).join("") : '<div class="empty"><h3>No pending or excess payments to review</h3></div>'}</section>`;
     $$("[data-reverify]").forEach(
       (b) =>
         (b.onclick = async () => {
@@ -503,9 +514,14 @@ async function renderPage() {
     c.innerHTML =
       heading(
         "Your workspace settings",
-        "Integration status and prototype boundaries.",
+        "Manage connections and payment services.",
       ) +
-      `<div class="status-grid"><section class="panel"><div class="panel-head"><h2>Connections</h2></div><div class="panel-body"><div class="setting-line"><div><h3>Gemini agent</h3><p>${esc(config.gemini_model)} · server-side API</p></div>${badge(config.gemini_configured ? "configured" : "not_configured")}</div><div class="setting-line"><div><h3>Paystack test checkout</h3><p>Test keys only. Live payments are blocked.</p></div>${badge(config.paystack_test_configured ? "configured" : "not_configured")}</div><div class="setting-line"><div><h3>SMS reminders</h3><p>Sandbox acceptance is not handset delivery.</p></div>${badge(config.sms_mode)}</div><div class="setting-line"><div><h3>Background processing</h3><p>Durable verification and reminder jobs.</p></div>${badge(config.background_worker ? "enabled" : "external_worker_needed")}</div><div class="setting-line"><div><h3>Demo payment simulator</h3><p>For fictional records only.</p></div>${badge(config.demo_mode ? "enabled" : "disabled")}</div></div></section><section class="panel"><div class="panel-head"><h2>Set up your integrations</h2></div><div class="panel-body"><p class="subtle small">Add credentials to the server’s <code>.env</code> file and restart. Keep API keys out of frontend code.</p><div class="info">Gemini: <code>GEMINI_API_KEY</code><br>Test payments: <code>PAYSTACK_SECRET_KEY</code> and <code>PAYSTACK_TEST_EMAIL</code><br>SMS sandbox: <code>ARKESEL_API_KEY</code>, <code>SMS_MODE=arkesel_sandbox</code><br>Worker: <code>RUN_BACKGROUND_WORKER=true</code></div><p class="small subtle">For shared deployment, configure HTTPS, secure cookies, a matching public URL, and a persistent database. See the included setup guide.</p><div class="info warning">Unallocated customer credit: <strong>GH₵ ${cash(summary.unallocated_minor)}</strong>. This can arise if two pending payments settle against the same debt. Review it before any manual refund.</div></div></section></div>`;
+      `<div class="status-grid"><section class="panel"><div class="panel-head"><h2>Connections</h2></div><div class="panel-body"><div class="setting-line"><div><h3>Gemini assistant</h3><p>${esc(config.gemini_model)}</p></div>${badge(config.gemini_configured ? "connected" : "not_connected")}</div><div class="setting-line"><div><h3>Paystack checkout</h3><p>${config.paystack_live_configured ? "Live payments enabled" : config.paystack_test_configured ? "Test payments enabled" : "Not connected"}</p></div>${badge(config.paystack_live_configured ? "live" : config.paystack_test_configured ? "test" : "not_connected")}</div><div class="setting-line"><div><h3>SMS reminders</h3><p>${config.sms_mode === "arkesel_live" ? "Live delivery" : config.sms_mode === "arkesel_sandbox" ? "Sandbox" : "Dry run"}</p></div>${badge(config.sms_mode)}</div><div class="setting-line"><div><h3>Background processing</h3><p>${config.background_worker ? "Running" : "Worker required"}</p></div>${badge(config.background_worker ? "enabled" : "not_running")}</div><div class="setting-line"><div><h3>Demo payments</h3><p>${config.demo_mode ? "Available" : "Off"}</p></div>${badge(config.demo_mode ? "enabled" : "disabled")}</div></div></section>${summary.unallocated_minor ? `<section class="panel"><div class="panel-head"><h2>Needs review</h2></div><div class="panel-body"><div class="info warning">Unallocated customer credit: <strong>GH₵ ${cash(summary.unallocated_minor)}</strong>. Review it before issuing a refund.</div><a class="btn secondary tiny" href="#" data-nav="recovery">Open payment recovery</a></div></section>` : ""}</div>`;
+    $("[data-nav=recovery]", c)?.addEventListener("click", (event) => {
+      event.preventDefault();
+      page = "recovery";
+      shell();
+    });
     const paystackHeading = Array.from($$(".setting-line h3", c)).find(
       (h) => h.textContent === "Paystack test checkout",
     );
@@ -592,7 +608,7 @@ async function renderPage() {
           icon("plus") +
           "Open savings record</button>",
       ) +
-      `<div class="info warning">Use a private contribution link for simulation or verified Paystack test payments. Manual entries record activity completed outside the app. All online payments remain test-only; collection fees are not applied.</div><section class="panel">${
+      `<p class="small subtle page-note">Use the private link for online contributions, or record completed activity manually.</p><section class="panel">${
         rows.length
           ? rows
               .map(
@@ -645,7 +661,7 @@ async function showReports(start = "", end = "") {
       "Period activity and current debt aging.",
       '<button class="btn secondary" id="print-report">Print report</button>',
     ) +
-    `<form id="report-range" class="button-row panel report-range">${field("From", "start", "date", r.start, "required")}${field("To", "end", "date", r.end, "required")}<button type="submit" class="btn">Apply dates</button><div class="form-error" role="alert"></div></form><section class="stats"><article class="stat"><div class="stat-top">Credit recorded in period</div><div class="number"><small>GH₵</small>${cash(r.new_credit_minor)}</div></article><article class="stat"><div class="stat-top">Net recorded repayments</div><div class="number"><small>GH₵</small>${cash(r.net_recorded_repayments_minor)}</div></article><article class="stat"><div class="stat-top">Period adjustments</div><div class="number"><small>GH₵</small>${cash(r.adjustments_minor)}</div></article><article class="stat primary"><div class="stat-top">Outstanding now</div><div class="number"><small>GH₵</small>${cash(r.outstanding_now_minor)}</div></article></section><div class="info">Repayment totals include manual and simulated records, net of ledger reversals. Current aging is as of ${esc(r.aging_as_of)}; it is not a historical balance snapshot for the selected end date.</div><div class="split"><section class="panel"><div class="panel-head"><h2>Current debt aging</h2></div><table><thead><tr><th>Age</th><th>Outstanding</th></tr></thead><tbody>${Object.entries(
+    `<form id="report-range" class="button-row panel report-range">${field("From", "start", "date", r.start, "required")}${field("To", "end", "date", r.end, "required")}<button type="submit" class="btn">Apply dates</button><div class="form-error" role="alert"></div></form><section class="stats"><article class="stat"><div class="stat-top">Credit recorded in period</div><div class="number"><small>GH₵</small>${cash(r.new_credit_minor)}</div></article><article class="stat"><div class="stat-top">Net recorded repayments</div><div class="number"><small>GH₵</small>${cash(r.net_recorded_repayments_minor)}</div></article><article class="stat"><div class="stat-top">Period adjustments</div><div class="number"><small>GH₵</small>${cash(r.adjustments_minor)}</div></article><article class="stat primary"><div class="stat-top">Outstanding now</div><div class="number"><small>GH₵</small>${cash(r.outstanding_now_minor)}</div></article></section><p class="small subtle page-note">Repayments are shown net of reversals. Aging reflects balances on ${esc(r.aging_as_of)}.</p><div class="split"><section class="panel"><div class="panel-head"><h2>Current debt aging</h2></div><table><thead><tr><th>Age</th><th>Outstanding</th></tr></thead><tbody>${Object.entries(
       r.aging,
     )
       .map(([k, v]) => `<tr><td>${esc(k)}</td><td>GH₵ ${cash(v)}</td></tr>`)
@@ -705,7 +721,7 @@ async function showDebt(id) {
     const d = await api("/debts/" + id);
     openModal(
       d.name,
-      `<div class="record-meta"><span>${esc(d.description)}</span>${badge(d.status)}</div><div class="detail-amount"><small>GH₵</small> ${cash(d.balance_minor)}</div><p class="subtle small">Outstanding balance${d.adjustments_minor ? ` · Corrections: GH₵ ${cash(d.adjustments_minor)}` : ""}</p><dl class="detail-list"><div><dt>Original sale</dt><dd>GH₵ ${cash(d.principal_minor)}</dd></div><div><dt>Repayments, net of reversals</dt><dd>GH₵ ${cash(d.paid_minor)}</dd></div><div><dt>Original due date</dt><dd>${fmtdate(d.due_date)}</dd></div><div><dt>Customer phone</dt><dd>${esc(d.phone)}</dd></div></dl><div class="button-row">${d.balance_minor > 0 ? '<button class="btn" id="record-payment">Record repayment</button>' : ""}<a class="btn secondary" target="_blank" rel="noopener" href="/pay/${d.public_token}">Open payment page ↗</a><button class="btn secondary" id="copy-link">Copy link</button>${isOwner() ? '<button class="text-btn" id="rotate-link">Replace private link</button>' : ""}${isOwner() && !d.cancelled ? '<button class="text-btn" id="correct-debt">Correct record</button>' : ""}${isOwner() ? `<button class="text-btn" id="pause-debt">${d.paused ? "Resume reminders" : "Pause reminders"}</button>` : ""}${isOwner() && d.balance_minor > 0 && !d.cancelled ? '<button class="btn secondary tiny" id="agree-plan">Agree repayment plan</button>' : ""}</div>${d.disputed ? '<div class="info warning">Customer dispute is open. Reminders and new checkout are suspended.</div>' : ""}${d.do_not_contact ? '<div class="info warning">This customer is opted out after a wrong-number report.</div>' : ""}<div class="info small">Cash and direct MoMo entries are trader-reported. Only transactions labelled “Paystack test” are verified against a payment provider.</div><h3>Financial history</h3>${d.ledger.map((e) => `<div class="ledger-item"><div><p><strong>${esc(e.kind)}</strong> · ${esc(e.note)}</p><small>${fmtdate(e.created_at)}</small></div><span class="amount">${e.amount_minor < 0 ? "−" : "+"} GH₵ ${cash(Math.abs(e.amount_minor))}</span></div>`).join("")}<h3 class="section-gap">Repayment records</h3>${d.payments.length ? d.payments.map((p) => `<div class="ledger-item"><div><p>GH₵ ${cash(p.amount_minor)} · ${esc(p.source.replaceAll("_", " "))}</p><small>${esc(p.status)}${p.unallocated_minor ? ` · GH₵ ${cash(p.unallocated_minor)} unallocated` : ""}</small>${isOwner() && p.status === "confirmed" && p.source !== "paystack_test" ? `<div><button class="text-btn" data-reverse="${p.id}">Reverse ledger entry</button></div>` : ""}</div><div><small class="mono">${esc(p.id.slice(0, 10))}</small>${["confirmed", "reversed"].includes(p.status) ? `<br><a class="muted-link" href="/api/payments/${p.id}/receipt.pdf">Download PDF acknowledgement</a>` : ""}</div></div>`).join("") : '<p class="small subtle">No repayments yet.</p>'}`,
+      `<div class="record-meta"><span>${esc(d.description)}</span>${badge(d.status)}</div><div class="detail-amount"><small>GH₵</small> ${cash(d.balance_minor)}</div><p class="subtle small">Outstanding balance${d.adjustments_minor ? ` · Corrections: GH₵ ${cash(d.adjustments_minor)}` : ""}</p><dl class="detail-list"><div><dt>Original sale</dt><dd>GH₵ ${cash(d.principal_minor)}</dd></div><div><dt>Repayments, net of reversals</dt><dd>GH₵ ${cash(d.paid_minor)}</dd></div><div><dt>Original due date</dt><dd>${fmtdate(d.due_date)}</dd></div><div><dt>Customer phone</dt><dd>${esc(d.phone)}</dd></div></dl><div class="button-row">${d.balance_minor > 0 ? '<button class="btn" id="record-payment">Record repayment</button>' : ""}<a class="btn secondary" target="_blank" rel="noopener" href="/pay/${d.public_token}">Open payment page ↗</a><button class="btn secondary" id="copy-link">Copy link</button>${isOwner() ? '<button class="text-btn" id="rotate-link">Replace private link</button>' : ""}${isOwner() && !d.cancelled ? '<button class="text-btn" id="correct-debt">Correct record</button>' : ""}${isOwner() ? `<button class="text-btn" id="pause-debt">${d.paused ? "Resume reminders" : "Pause reminders"}</button>` : ""}${isOwner() && d.balance_minor > 0 && !d.cancelled ? '<button class="btn secondary tiny" id="agree-plan">Agree repayment plan</button>' : ""}</div>${d.disputed ? '<div class="info warning">Customer dispute is open. Reminders and new checkout are suspended.</div>' : ""}${d.do_not_contact ? '<div class="info warning">This customer is opted out after a wrong-number report.</div>' : ""}<h3>Financial history</h3>${d.ledger.map((e) => `<div class="ledger-item"><div><p><strong>${esc(e.kind)}</strong> · ${esc(e.note)}</p><small>${fmtdate(e.created_at)}</small></div><span class="amount">${e.amount_minor < 0 ? "−" : "+"} GH₵ ${cash(Math.abs(e.amount_minor))}</span></div>`).join("")}<h3 class="section-gap">Repayment records</h3>${d.payments.length ? d.payments.map((p) => `<div class="ledger-item"><div><p>GH₵ ${cash(p.amount_minor)} · ${esc(p.source.replaceAll("_", " "))}</p><small>${esc(p.status)}${p.unallocated_minor ? ` · GH₵ ${cash(p.unallocated_minor)} unallocated` : ""}</small>${isOwner() && p.status === "confirmed" && !p.source.startsWith("paystack_") ? `<div><button class="text-btn" data-reverse="${p.id}">Reverse ledger entry</button></div>` : ""}</div><div><small class="mono">${esc(p.id.slice(0, 10))}</small>${["confirmed", "reversed"].includes(p.status) ? `<br><a class="muted-link" href="/api/payments/${p.id}/receipt.pdf">Download PDF acknowledgement</a>` : ""}</div></div>`).join("") : '<p class="small subtle">No repayments yet.</p>'}`,
     );
     $(".modal-body", mc).insertAdjacentHTML(
       "beforeend",
@@ -792,7 +808,7 @@ async function showDebt(id) {
 function manualPayment(d) {
   openModal(
     "Record a repayment",
-    `<p class="subtle small">${esc(d.name)} · Outstanding GH₵ ${cash(d.balance_minor)}</p><div class="info warning">Use this for cash or direct MoMo already received and checked by the trader. This action does not verify a MoMo transaction.</div><form id="payment-form">${field("Amount received (GHS)", "amount", "number", "", 'required min="0.01" step="0.01" max="' + d.balance_minor / 100 + '"')}<div class="field"><label for="source">Payment method</label><select name="source" id="source"><option value="cash">Cash received</option><option value="direct_momo">Direct MoMo — checked manually</option></select></div>${field("Reference or explanation", "note", "text", "", 'required maxlength="300"')}<div class="form-error" role="alert"></div><button class="btn" type="submit">Record received payment</button></form>`,
+    `<p class="subtle small">${esc(d.name)} · Outstanding GH₵ ${cash(d.balance_minor)}</p><p class="small subtle page-note">Record only payments you have already received and checked.</p><form id="payment-form">${field("Amount received (GHS)", "amount", "number", "", 'required min="0.01" step="0.01" max="' + d.balance_minor / 100 + '"')}<div class="field"><label for="source">Payment method</label><select name="source" id="source"><option value="cash">Cash received</option><option value="direct_momo">Direct MoMo — checked manually</option></select></div>${field("Reference or explanation", "note", "text", "", 'required maxlength="300"')}<div class="form-error" role="alert"></div><button class="btn" type="submit">Record received payment</button></form>`,
   );
   const key = crypto.randomUUID();
   bindForm("#payment-form", async (data) => {
@@ -823,7 +839,7 @@ async function agentDialog(message = "") {
     history = [];
   openModal(
     "Your Gemini assistant",
-    `<p class="subtle small">Continue a draft by supplying missing details. Confirm every new debt before it enters the ledger.</p>${!config.gemini_configured ? '<div class="info warning">Configure GEMINI_API_KEY on the server to enable the agent.</div>' : ""}<div class="chat-actions"><span class="small subtle">History expires after 24 hours.</span><button class="text-btn" id="clear-chat">Clear conversation</button></div><div id="agent-output" class="chat-history" aria-live="polite"></div><form id="agent-form"><div class="field section-gap"><label for="agent-message">Your message</label><textarea id="agent-message" name="message" required minlength="3" maxlength="2000" placeholder="Record GH₵600 owed by Kofi; he already paid GH₵200.">${esc(message)}</textarea></div><label class="check"><input type="checkbox" name="consent" value="yes" required><span>Send this request, recent conversation and scoped debt context to Gemini. Use fictional records for testing.</span></label><div class="form-error" role="alert"></div><button class="btn" type="submit" ${config.gemini_configured ? "" : "disabled"}>Ask Gemini ✧</button></form>`,
+    `<p class="subtle small">Continue a draft by supplying missing details. Confirm every new debt before it enters the ledger.</p>${!config.gemini_configured ? '<p class="small subtle page-note">Gemini is not connected.</p>' : ""}<div class="chat-actions"><span class="small subtle">History expires after 24 hours.</span><button class="text-btn" id="clear-chat">Clear conversation</button></div><div id="agent-output" class="chat-history" aria-live="polite"></div><form id="agent-form"><div class="field section-gap"><label for="agent-message">Your message</label><textarea id="agent-message" name="message" required minlength="3" maxlength="2000" placeholder="Record GH₵600 owed by Kofi; he already paid GH₵200.">${esc(message)}</textarea></div><label class="check"><input type="checkbox" name="consent" value="yes" required><span>Send this request, recent conversation and relevant debt context to Gemini.</span></label><div class="form-error" role="alert"></div><button class="btn" type="submit" ${config.gemini_configured ? "" : "disabled"}>Ask Gemini ✧</button></form>`,
   );
   const output = $("#agent-output");
   function renderHistory() {
@@ -926,7 +942,7 @@ function newSusu() {
 function susuEntry(id) {
   openModal(
     "Record savings activity",
-    `<div class="info warning">Record a contribution or payout already completed outside this application. No transfer will be initiated.</div><form id="susu-entry"><div class="field"><label for="kind">Activity</label><select name="kind" id="kind"><option value="contribution">Contribution received</option>${isOwner() ? '<option value="payout">Payout completed</option>' : ""}</select></div>${field("Amount (GHS)", "amount", "number", "", 'required min="0.01" step="0.01"')}${field("Explanation / external reference", "note", "text", "", 'required minlength="3" maxlength="300"')}<div class="form-error" role="alert"></div><button class="btn" type="submit">Record activity</button></form>`,
+    `<p class="small subtle page-note">Record only activity already completed outside Sika Ledger.</p><form id="susu-entry"><div class="field"><label for="kind">Activity</label><select name="kind" id="kind"><option value="contribution">Contribution received</option>${isOwner() ? '<option value="payout">Payout completed</option>' : ""}</select></div>${field("Amount (GHS)", "amount", "number", "", 'required min="0.01" step="0.01"')}${field("Explanation / external reference", "note", "text", "", 'required minlength="3" maxlength="300"')}<div class="form-error" role="alert"></div><button class="btn" type="submit">Record activity</button></form>`,
   );
   const ref = crypto.randomUUID();
   bindForm("#susu-entry", async (data) => {
@@ -997,9 +1013,15 @@ async function paymentPage(token) {
   }
   describePaystackCheckout("#pay-mode");
   const paymentDisclosure = $(".public-card .info.warning");
-  if (paymentDisclosure && config.paystack_live_configured)
-    paymentDisclosure.textContent =
-      "Paystack LIVE moves real money; test and simulator options do not. Enter card or MoMo credentials only on Paystack’s secure checkout. Sika Ledger never asks for your PIN, CVV or OTP.";
+  if (paymentDisclosure) {
+    if (config.paystack_live_configured) {
+      paymentDisclosure.textContent =
+        "Paystack LIVE moves real money. Enter payment details only on Paystack’s secure checkout. Sika Ledger never asks for your PIN, CVV or OTP.";
+    } else {
+      paymentDisclosure.className = "small subtle page-note";
+      paymentDisclosure.textContent = "Test checkout — no money moves.";
+    }
+  }
   addLiveCheckout(
     "#pay-mode",
     "#checkout-form button[type=submit]",
@@ -1009,6 +1031,9 @@ async function paymentPage(token) {
     "beforeend",
     '<br><a href="/privacy">Privacy notice</a>',
   );
+  for (const node of $(".public-footer").childNodes)
+    if (node.nodeType === Node.TEXT_NODE)
+      node.nodeValue = node.nodeValue.replace("Sika Ledger prototype", "Sika Ledger");
   $(".public-card").insertAdjacentHTML("beforeend", planPanel(d.plan, true));
   if ($("#checkout-form")) {
     const key = crypto.randomUUID();
@@ -1023,7 +1048,7 @@ async function paymentPage(token) {
       } else if (result.mode === "simulation") {
         openModal(
           "Simulate a repayment",
-          `<div class="info warning">This is a demonstration. No MoMo request is sent and no money will move.</div><p>Apply a simulated payment of <strong>GH₵ ${esc(data.amount)}</strong> to this test debt?</p><div class="modal-footer"><button class="btn" id="simulate-confirm">Confirm simulation</button></div>`,
+          `<p class="small subtle page-note">Demo only — no money moves.</p><p>Apply a simulated payment of <strong>GH₵ ${esc(data.amount)}</strong> to this test debt?</p><div class="modal-footer"><button class="btn" id="simulate-confirm">Confirm simulation</button></div>`,
         );
         $("#simulate-confirm").onclick = async (e) => {
           e.target.disabled = true;
@@ -1092,9 +1117,16 @@ async function contributionPage(token) {
   }
   describePaystackCheckout("#contribution-mode");
   const contributionDisclosure = $(".public-card .info.warning");
-  if (contributionDisclosure && config.paystack_live_configured)
-    contributionDisclosure.textContent =
-      "A Paystack LIVE contribution moves real money and only increases this savings record; it does not repay trade debt. Enter payment credentials only on Paystack’s secure checkout.";
+  if (contributionDisclosure) {
+    if (config.paystack_live_configured) {
+      contributionDisclosure.textContent =
+        "A live contribution moves real money and increases this savings record; it does not repay trade debt. Enter payment details only on Paystack’s secure checkout.";
+    } else {
+      contributionDisclosure.className = "small subtle page-note";
+      contributionDisclosure.textContent =
+        "Test contribution — no money moves and trade debt is unchanged.";
+    }
+  }
   addLiveCheckout(
     "#contribution-mode",
     "#contribution-form button[type=submit]",
@@ -1117,7 +1149,7 @@ async function contributionPage(token) {
     if (result.mode === "simulation") {
       openModal(
         "Simulate a susu contribution",
-        `<div class="info warning">No real money moves.</div><p>Add GH₵ ${esc(data.amount)} to this savings record?</p><div class="modal-footer"><button class="btn" id="confirm-contribution">Confirm simulation</button></div>`,
+        `<p class="small subtle page-note">Demo only — no money moves.</p><p>Add GH₵ ${esc(data.amount)} to this savings record?</p><div class="modal-footer"><button class="btn" id="confirm-contribution">Confirm simulation</button></div>`,
       );
       $("#confirm-contribution").onclick = async (e) => {
         e.target.disabled = true;
@@ -1238,6 +1270,8 @@ async function showCustomer(cid) {
           }</section>`
         : ""
     }`;
+  const customerSummary = $("#content > .info");
+  if (customerSummary) customerSummary.className = "small subtle page-note";
   $("#back-customers").onclick = () => {
     profileId = null;
     renderPage().catch((e) => toast(e.message));
@@ -1275,6 +1309,8 @@ async function showTeam() {
       '<button class="btn" id="new-collector">Add collector</button>',
     ) +
     `<div class="info">Collectors can view customer accounts, statements and reminder history. They cannot reverse payments, record payouts, change consent, manage plans, access integration settings or manage staff.</div><section class="panel">${rows.map((a) => `<article class="record-card"><div class="record-meta"><h3>${esc(a.name)}</h3>${badge(a.active ? a.role : "disabled")}</div><p class="small subtle">Login: ${esc(a.login)}</p>${a.role === "collector" ? `<div class="button-row"><button class="btn secondary tiny" data-staff-active="${a.id}" data-next="${!a.active}">${a.active ? "Disable access" : "Enable access"}</button><button class="text-btn" data-reset-staff="${a.id}">Reset password</button></div>` : ""}</article>`).join("")}</section>`;
+  const teamSummary = $("#content > .info");
+  if (teamSummary) teamSummary.className = "small subtle page-note";
   $("#new-collector").onclick = () => {
     openModal(
       "Add collector",

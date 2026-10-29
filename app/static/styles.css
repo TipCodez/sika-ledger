@@ -73,6 +73,13 @@
 .section-gap {
   margin-top: 20px;
 }
+.page-note {
+  margin: 0 0 16px;
+  line-height: 1.55;
+}
+.modal-body .page-note {
+  margin-top: 12px;
+}
 .agent-body {
   padding-top: 23px !important;
 }
