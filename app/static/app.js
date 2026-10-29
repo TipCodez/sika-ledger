@@ -31,6 +31,7 @@ const icons = {
   wallet:
     '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M17 14h4M7 5V3h10"/>',
   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+  close: '<path d="M6 6l12 12M18 6 6 18"/>',
 };
 const icon = (n) =>
   `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[n] || icons.debts}</svg>`;
@@ -134,6 +135,7 @@ function field(label, name, type = "text", value = "", extra = "") {
   return `<div class="field"><label for="f-${name}">${esc(label)}</label><input id="f-${name}" name="${name}" type="${type}" value="${esc(value)}" ${extra}></div>`;
 }
 function auth(register = false) {
+  document.body.classList.remove("nav-open");
   page = "overview";
   app.innerHTML = `<div class="auth"><section class="auth-art">${brand()}<div><div class="eyebrow">Made for everyday business</div><h1>Your debt book.<br>A little smarter.</h1><p>Keep track of what you’re owed, follow up kindly, and see every repayment in one place.</p><div class="auth-orbit"><div class="row"><span class="eyebrow">An example account</span>${badge("paid")}</div><div class="row"><strong>GH₵ 500.00</strong><span>✓</span></div><p>A clear record. A friendly reminder. One less thing to remember.</p></div></div><div class="auth-bottom"><span>Built for Ghanaian businesses</span><span>Ghana cedis · GHS</span></div></section><main class="auth-main"><div class="auth-box"><h2 class="auth-title">${register ? "Start your debt book" : "Welcome back"}</h2><p>${register ? "Create a business account to get started." : "Sign in to see how your business is doing."}</p><form id="auth-form">${register ? field("Business name", "name", "text", "", 'required maxlength="100" autocomplete="organization"') : ""}${field("Login name", "login", "text", "", 'required minlength="3" maxlength="100" autocomplete="username"')}${field("Password", "password", "password", "", 'required minlength="10" maxlength="128" autocomplete="' + (register ? "new-password" : "current-password") + '"')}<div class="form-error" role="alert"></div><button type="submit" class="btn">${register ? "Create business account" : "Sign in"} ${icon("arrow")}</button></form><div class="auth-toggle">${register ? "Already have an account?" : "New here?"} <button class="text-btn" id="auth-toggle">${register ? "Sign in" : "Create an account"}</button></div></div></main></div>`;
   $(".auth-box").insertAdjacentHTML(
@@ -172,7 +174,8 @@ const navNames = {
   settings: "Settings",
 };
 function shell() {
-  app.innerHTML = `<div class="shell"><aside class="sidebar">${brand()}<div class="nav-label">Workspace</div><nav class="nav" aria-label="Main navigation">${Object.entries(
+  document.body.classList.remove("nav-open");
+  app.innerHTML = `<div class="shell"><aside class="sidebar" id="app-sidebar">${brand()}<div class="nav-label">Workspace</div><nav class="nav" aria-label="Main navigation">${Object.entries(
     navNames,
   )
     .filter(
@@ -187,11 +190,11 @@ function shell() {
     )
     .join(
       "",
-    )}</nav><div class="side-bottom"><div class="side-note"><h3>Meet your assistant <span>✧</span></h3><p>Turn a quick note into a debt record with Gemini.</p><button class="text-btn" data-agent>Try the assistant →</button></div><nav class="nav"><button data-page="settings">${icon("settings")}Settings</button></nav><div class="profile"><div class="avatar">${esc(initials(user.name))}</div><div><strong class="small">${esc(user.actor_name || user.name)}</strong><div class="subtle small">${esc(user.role)}</div></div><button id="logout" aria-label="Sign out">${icon("logout")}</button></div></div></aside><div class="workspace"><header class="topbar"><div class="breadcrumb"><button class="mobile-menu" aria-label="Open navigation">${icon("menu")}</button><span>Workspace</span><span>/</span><strong id="crumb">${navNames[page]}</strong></div><div class="top-right"><span class="mode">PROTOTYPE · NO LIVE MONEY</span><span class="small subtle">${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span></div></header><main class="content" id="content"></main></div></div>`;
+    )}</nav><div class="side-bottom"><div class="side-note"><h3>Meet your assistant <span>✧</span></h3><p>Turn a quick note into a debt record with Gemini.</p><button class="text-btn" data-agent>Try the assistant →</button></div><nav class="nav"><button data-page="settings">${icon("settings")}Settings</button></nav><div class="profile"><div class="avatar">${esc(initials(user.name))}</div><div><strong class="small">${esc(user.actor_name || user.name)}</strong><div class="subtle small">${esc(user.role)}</div></div><button id="logout" aria-label="Sign out">${icon("logout")}</button></div></div></aside><button class="sidebar-scrim" aria-label="Close navigation"></button><div class="workspace"><header class="topbar"><div class="breadcrumb"><button class="mobile-menu" aria-label="Open navigation" aria-controls="app-sidebar" aria-expanded="false">${icon("menu")}</button><span>Workspace</span><span>/</span><strong id="crumb">${navNames[page]}</strong></div><div class="top-right"><span class="mode">PROTOTYPE · NO LIVE MONEY</span><span class="small subtle">${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span></div></header><main class="content" id="content"></main></div></div>`;
   $(".top-right .mode")?.remove();
   $(".sidebar").insertAdjacentHTML(
     "afterbegin",
-    '<button class="sidebar-close" aria-label="Close navigation">×</button>',
+    `<button class="sidebar-close" aria-label="Close navigation">${icon("close")}</button>`,
   );
   $$("[data-page]").forEach(
     (b) =>
@@ -214,8 +217,16 @@ function shell() {
     user = null;
     auth();
   };
-  $(".mobile-menu").onclick = () => $(".sidebar").classList.toggle("open");
-  $(".sidebar-close").onclick = () => $(".sidebar").classList.remove("open");
+  const setNavigationOpen = (open) => {
+    $(".sidebar").classList.toggle("open", open);
+    $(".sidebar-scrim").classList.toggle("open", open);
+    $(".mobile-menu").setAttribute("aria-expanded", String(open));
+    document.body.classList.toggle("nav-open", open);
+  };
+  $(".mobile-menu").onclick = () =>
+    setNavigationOpen(!$(".sidebar").classList.contains("open"));
+  $(".sidebar-close").onclick = () => setNavigationOpen(false);
+  $(".sidebar-scrim").onclick = () => setNavigationOpen(false);
   renderPage().catch((e) => toast(e.message));
 }
 function $$(s, r = document) {
@@ -306,6 +317,7 @@ function wireRowButtons() {
 async function renderPage() {
   const c = $("#content");
   if (!c) return;
+  c.className = "content";
   $("#crumb").textContent = navNames[page];
   if (page === "overview") {
     const due = records
@@ -1203,6 +1215,7 @@ async function showCustomer(cid) {
   const history = isOwner()
     ? await api("/customers/" + cid + "/contact-history")
     : [];
+  $("#content").classList.add("profile-content");
   $("#content").innerHTML =
     heading(
       esc(c.name),
