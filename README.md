@@ -191,6 +191,9 @@ A live checkout requires an email for the provider receipt and an active,
 verified merchant subaccount. It uses GHS, the merchant subaccount and
 `bearer=subaccount`, so the merchant bears provider fees. Balances still change
 only after signed webhook intake and server verification in the live environment.
+Checkout does not restrict Paystack to a single channel: Paystack displays the
+card, bank, bank-transfer, USSD, mobile-money or other methods enabled for that
+merchant and transaction. Availability remains controlled by Paystack.
 The owner API can list refunds and provider disputes, review/retry durable finance
 events, sync recent settlements, and reconcile every transaction in a settlement.
 Ambiguous refund submissions are marked `unknown` for manual provider review and

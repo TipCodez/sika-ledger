@@ -268,12 +268,13 @@ def create_app(database_url=None, overrides=None):
 
     @app.get('/api/config')
     def config():return {'demo_mode':settings['demo'],'gemini_configured':bool(settings['gemini_key']),
-        'gemini_model':settings['gemini_model'],'paystack_test_configured':bool(settings['paystack_key'] and settings['paystack_email']),
+        'gemini_model':settings['gemini_model'],'paystack_test_configured':bool(
+            settings['paystack_key'].startswith('sk_test_') and settings['paystack_email']),
         'paystack_live_configured':bool(settings['enable_live_payments'] and settings['paystack_key'].startswith('sk_live_')),
         'sms_mode':settings['sms_mode'],'sms_configured':bool(settings['arkesel_key']),
         'background_worker':settings['worker_enabled'],'automatic_reminders':settings['automatic_reminders'],
         'arkesel_callbacks':settings['arkesel_callbacks'],
-        'payment_mode':'test_only'}
+        'payment_mode':'live' if settings['enable_live_payments'] else 'test_only'}
 
     @app.post('/api/auth/register')
     def register(data:Register,response:Response):
@@ -455,7 +456,7 @@ def create_app(database_url=None, overrides=None):
     async def checkout(token:str,data:CheckoutIn):
         amount=money(data.amount)
         if data.mode=='simulation' and not settings['demo']:raise HTTPException(403,'Payment simulation is disabled.')
-        if data.mode=='paystack_test' and not(settings['paystack_key'] and settings['paystack_email']):
+        if data.mode=='paystack_test' and not(settings['paystack_key'].startswith('sk_test_') and settings['paystack_email']):
             raise HTTPException(503,'Configure PAYSTACK_SECRET_KEY (test only) and PAYSTACK_TEST_EMAIL first.')
         if data.mode=='paystack_live' and not settings['enable_live_payments']:
             raise HTTPException(503,'Live Paystack collection is not enabled.')
@@ -487,7 +488,7 @@ def create_app(database_url=None, overrides=None):
             async with httpx.AsyncClient(timeout=20) as client:
                 payload={'reference':ref,'amount':amount,'currency':'GHS',
                     'email':data.email if data.mode=='paystack_live' else settings['paystack_email'],
-                    'channels':['mobile_money'], 'metadata':{'debt_id':d['id'],'merchant_id':d['merchant_id']},
+                    'metadata':{'debt_id':d['id'],'merchant_id':d['merchant_id']},
                     'callback_url':settings['base_url']+'/pay/'+token}
                 if subaccount:
                     payload.update(subaccount=subaccount['subaccount_code'],bearer='subaccount')
@@ -887,7 +888,7 @@ def create_app(database_url=None, overrides=None):
     async def contribution_checkout(token:str,data:CheckoutIn):
         amount=money(data.amount)
         if data.mode=='simulation' and not settings['demo']:raise HTTPException(403,'Simulation is disabled.')
-        if data.mode=='paystack_test' and not(settings['paystack_key'] and settings['paystack_email']):
+        if data.mode=='paystack_test' and not(settings['paystack_key'].startswith('sk_test_') and settings['paystack_email']):
             raise HTTPException(503,'Configure the Paystack test key and test email first.')
         if data.mode=='paystack_live' and not settings['enable_live_payments']:
             raise HTTPException(503,'Live Paystack collection is not enabled.')
@@ -914,7 +915,7 @@ def create_app(database_url=None, overrides=None):
             async with httpx.AsyncClient(timeout=20) as client:
                 payload={'reference':ref,'amount':amount,'currency':'GHS',
                     'email':data.email if data.mode=='paystack_live' else settings['paystack_email'],
-                    'channels':['mobile_money'],'metadata':{'purpose':'susu_contribution',
+                    'metadata':{'purpose':'susu_contribution',
                         'account_id':a['id'],'merchant_id':a['merchant_id']},
                     'callback_url':settings['base_url']+'/contribute/'+token}
                 if subaccount:

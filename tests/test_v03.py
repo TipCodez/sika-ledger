@@ -89,6 +89,7 @@ def test_paystack_savings_initialization_verification_and_webhook(client,debt,ac
     result=savings_checkout(client,account,'50','provider-savings-01','paystack_test')
     assert result.status_code==200
     assert captured['metadata']['purpose']=='susu_contribution' and 'debt_id' not in captured['metadata']
+    assert 'channels' not in captured
     ref=result.json()['reference']
     event=json.dumps({'event':'charge.success','data':{'reference':ref}}).encode()
     sig=hmac.new(b'sk_test_v03',event,hashlib.sha512).hexdigest()

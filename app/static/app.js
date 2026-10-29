@@ -942,7 +942,7 @@ function addLiveCheckout(selectId, buttonSelector, liveLabel) {
   if (!select) return;
   select.insertAdjacentHTML(
     "beforeend",
-    '<option value="paystack_live">Paystack LIVE MoMo — real money</option>',
+    '<option value="paystack_live">Paystack LIVE — card, bank, MoMo & available methods</option>',
   );
   select.closest(".field").insertAdjacentHTML(
     "afterend",
@@ -971,6 +971,21 @@ function addLiveCheckout(selectId, buttonSelector, liveLabel) {
   select.addEventListener("change", sync);
   sync();
 }
+function describePaystackCheckout(selectId) {
+  const select = $(selectId);
+  if (!select) return;
+  const testOption = select.querySelector('option[value="paystack_test"]');
+  if (testOption)
+    testOption.textContent =
+      "Paystack TEST — card, bank, MoMo & available methods";
+  const label = select.closest(".field")?.querySelector("label");
+  if (label && config.paystack_live_configured) label.textContent = "Payment method";
+  if (testOption || config.paystack_live_configured)
+    select.closest(".field").insertAdjacentHTML(
+      "beforeend",
+      '<p class="small subtle">Paystack will show the payment channels enabled for this business and transaction. Availability can vary by account and country.</p>',
+    );
+}
 async function paymentPage(token) {
   const d = await api("/public/" + encodeURIComponent(token));
   app.innerHTML = `<main class="public-wrap">${brand()}<article class="public-card"><div class="record-meta"><span class="eyebrow">Private payment page</span>${badge(d.status)}</div><h1>${esc(d.business_name)}</h1><p class="subtle small">For ${esc(d.name)} · ${esc(d.description)}</p><div class="detail-amount"><small>GH₵</small> ${cash(d.balance_minor)}</div><p class="subtle small">Outstanding · Original due date ${fmtdate(d.due_date)}</p><dl class="detail-list section-gap"><div><dt>Original sale</dt><dd>GH₵ ${cash(d.principal_minor)}</dd></div><div><dt>Repayments recorded</dt><dd>GH₵ ${cash(d.paid_minor)}</dd></div></dl><div class="info warning">Test environment. No real money moves through this prototype. Never share a MoMo PIN, password or OTP here.</div>${d.disputed ? '<div class="info">This balance is under review. New checkout and reminders are suspended.</div>' : d.balance_minor > 0 ? `<form id="checkout-form">${field("How much would you like to pay? (GHS)", "amount", "number", String(d.balance_minor / 100), 'required min="0.01" step="0.01" max="' + d.balance_minor / 100 + '"')}<div class="field"><label for="pay-mode">Test payment method</label><select id="pay-mode" name="mode">${config.demo_mode ? '<option value="simulation">Demo simulator — no money moves</option>' : ""}${config.paystack_test_configured ? '<option value="paystack_test">Paystack TEST MoMo checkout</option>' : ""}</select></div><div class="form-error" role="alert"></div><button type="submit" class="btn" ${!config.demo_mode && !config.paystack_test_configured ? "disabled" : ""}>${config.demo_mode ? "Start test repayment" : "Continue to test checkout"} ${icon("arrow")}</button></form>` : '<div class="info">This debt is settled. Thank you.</div>'}<button class="text-btn section-gap" id="dispute-link">Incorrect balance or wrong number?</button><h3 class="section-gap">Repayment acknowledgements</h3>${d.receipts.length ? d.receipts.map((p) => `<div class="ledger-item"><div><p>GH₵ ${cash(p.amount_minor)} · ${esc(p.source.replaceAll("_", " "))}</p><small>${esc(p.status)} · ${p.date ? fmtdate(p.date) : ""}</small>${p.unallocated_minor ? `<p class="small">GH₵ ${cash(p.unallocated_minor)} credit requires business review.</p>` : ""}</div><div><span class="mono">${esc(p.id.slice(0, 8))}</span><br><a class="muted-link" href="/api/public/${token}/receipts/${p.id}/pdf">Download PDF acknowledgement</a></div></div>`).join("") : '<p class="small subtle">Your acknowledgement will appear after a payment is recorded or verified.</p>'}</article><p class="public-footer">A private link for this debt only. No account or app installation required.<br>Sika Ledger prototype · Ghana cedis (GHS)</p></main>`;
@@ -980,10 +995,15 @@ async function paymentPage(token) {
       `<p class="business-contact"><strong>Business contact:</strong> ${esc(d.business_contact)}</p>`,
     );
   }
+  describePaystackCheckout("#pay-mode");
+  const paymentDisclosure = $(".public-card .info.warning");
+  if (paymentDisclosure && config.paystack_live_configured)
+    paymentDisclosure.textContent =
+      "Paystack LIVE moves real money; test and simulator options do not. Enter card or MoMo credentials only on Paystack’s secure checkout. Sika Ledger never asks for your PIN, CVV or OTP.";
   addLiveCheckout(
     "#pay-mode",
     "#checkout-form button[type=submit]",
-    "Continue to secure MoMo checkout",
+    "Continue to secure Paystack checkout",
   );
   $(".public-footer").insertAdjacentHTML(
     "beforeend",
@@ -1070,10 +1090,15 @@ async function contributionPage(token) {
       `<p class="business-contact"><strong>Business contact:</strong> ${esc(d.business_contact)}</p>`,
     );
   }
+  describePaystackCheckout("#contribution-mode");
+  const contributionDisclosure = $(".public-card .info.warning");
+  if (contributionDisclosure && config.paystack_live_configured)
+    contributionDisclosure.textContent =
+      "A Paystack LIVE contribution moves real money and only increases this savings record; it does not repay trade debt. Enter payment credentials only on Paystack’s secure checkout.";
   addLiveCheckout(
     "#contribution-mode",
     "#contribution-form button[type=submit]",
-    "Continue to secure MoMo contribution",
+    "Continue to secure Paystack contribution",
   );
   $(".public-footer").insertAdjacentHTML(
     "beforeend",

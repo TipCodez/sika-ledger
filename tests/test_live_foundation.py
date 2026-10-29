@@ -97,6 +97,20 @@ def test_live_checkout_uses_active_merchant_subaccount_and_customer_email(client
     assert captured["email"]=="customer@example.com"
     assert captured["subaccount"]=="ACCT_live_merchant"
     assert captured["bearer"]=="subaccount"
+    assert "channels" not in captured
     with client.app.state.engine.connect() as conn:
         saved=conn.execute(select(payments).where(payments.c.reference==response.json()["reference"])).mappings().one()
     assert saved["source"]=="paystack_live"
+
+
+def test_live_key_never_advertises_or_accepts_test_checkout(client,debt):
+    client.app.state.settings.update(paystack_key="sk_live_example",paystack_email="test@example.com",
+        enable_live_payments=True,paystack_account_approved=True,secure_cookie=True,
+        base_url="https://ledger.example")
+    config=client.get('/api/config').json()
+    assert config['paystack_test_configured'] is False
+    assert config['paystack_live_configured'] is True
+    assert config['payment_mode']=='live'
+    response=client.post('/api/public/'+debt['public_token']+'/checkout',json={
+        'amount':'10','mode':'paystack_test','idempotency_key':'wrong-mode-001'})
+    assert response.status_code==503
