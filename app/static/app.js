@@ -808,7 +808,7 @@ async function showDebt(id) {
 function manualPayment(d) {
   openModal(
     "Record a repayment",
-    `<p class="subtle small">${esc(d.name)} · Outstanding GH₵ ${cash(d.balance_minor)}</p><p class="small subtle page-note">Record only payments you have already received and checked.</p><form id="payment-form">${field("Amount received (GHS)", "amount", "number", "", 'required min="0.01" step="0.01" max="' + d.balance_minor / 100 + '"')}<div class="field"><label for="source">Payment method</label><select name="source" id="source"><option value="cash">Cash received</option><option value="direct_momo">Direct MoMo — checked manually</option></select></div>${field("Reference or explanation", "note", "text", "", 'required maxlength="300"')}<div class="form-error" role="alert"></div><button class="btn" type="submit">Record received payment</button></form>`,
+    `<p class="subtle small">${esc(d.name)} · Outstanding GH₵ ${cash(d.balance_minor)}</p><p class="small subtle page-note">Record only payments you have already received and checked.</p><form id="payment-form">${field("Amount received (GHS)", "amount", "number", "", 'required min="0.01" step="0.01" max="' + d.balance_minor / 100 + '"')}<div class="field"><label for="source">Payment method</label><select name="source" id="source"><option value="cash">Cash received</option><option value="direct_momo">Direct MoMo (checked manually)</option></select></div>${field("Reference or explanation", "note", "text", "", 'required maxlength="300"')}<div class="form-error" role="alert"></div><button class="btn" type="submit">Record received payment</button></form>`,
   );
   const key = crypto.randomUUID();
   bindForm("#payment-form", async (data) => {
@@ -958,7 +958,7 @@ function addLiveCheckout(selectId, buttonSelector, liveLabel) {
   if (!select) return;
   select.insertAdjacentHTML(
     "beforeend",
-    '<option value="paystack_live">Paystack LIVE — card, bank, MoMo & available methods</option>',
+    '<option value="paystack_live">Paystack LIVE: card, bank, MoMo and available methods</option>',
   );
   select.closest(".field").insertAdjacentHTML(
     "afterend",
@@ -993,7 +993,7 @@ function describePaystackCheckout(selectId) {
   const testOption = select.querySelector('option[value="paystack_test"]');
   if (testOption)
     testOption.textContent =
-      "Paystack TEST — card, bank, MoMo & available methods";
+      "Paystack TEST: card, bank, MoMo and available methods";
   const label = select.closest(".field")?.querySelector("label");
   if (label && config.paystack_live_configured) label.textContent = "Payment method";
   if (testOption || config.paystack_live_configured)
@@ -1004,7 +1004,7 @@ function describePaystackCheckout(selectId) {
 }
 async function paymentPage(token) {
   const d = await api("/public/" + encodeURIComponent(token));
-  app.innerHTML = `<main class="public-wrap">${brand()}<article class="public-card"><div class="record-meta"><span class="eyebrow">Private payment page</span>${badge(d.status)}</div><h1>${esc(d.business_name)}</h1><p class="subtle small">For ${esc(d.name)} · ${esc(d.description)}</p><div class="detail-amount"><small>GH₵</small> ${cash(d.balance_minor)}</div><p class="subtle small">Outstanding · Original due date ${fmtdate(d.due_date)}</p><dl class="detail-list section-gap"><div><dt>Original sale</dt><dd>GH₵ ${cash(d.principal_minor)}</dd></div><div><dt>Repayments recorded</dt><dd>GH₵ ${cash(d.paid_minor)}</dd></div></dl><div class="info warning">Test environment. No real money moves through this prototype. Never share a MoMo PIN, password or OTP here.</div>${d.disputed ? '<div class="info">This balance is under review. New checkout and reminders are suspended.</div>' : d.balance_minor > 0 ? `<form id="checkout-form">${field("How much would you like to pay? (GHS)", "amount", "number", String(d.balance_minor / 100), 'required min="0.01" step="0.01" max="' + d.balance_minor / 100 + '"')}<div class="field"><label for="pay-mode">Test payment method</label><select id="pay-mode" name="mode">${config.demo_mode ? '<option value="simulation">Demo simulator — no money moves</option>' : ""}${config.paystack_test_configured ? '<option value="paystack_test">Paystack TEST MoMo checkout</option>' : ""}</select></div><div class="form-error" role="alert"></div><button type="submit" class="btn" ${!config.demo_mode && !config.paystack_test_configured ? "disabled" : ""}>${config.demo_mode ? "Start test repayment" : "Continue to test checkout"} ${icon("arrow")}</button></form>` : '<div class="info">This debt is settled. Thank you.</div>'}<button class="text-btn section-gap" id="dispute-link">Incorrect balance or wrong number?</button><h3 class="section-gap">Repayment acknowledgements</h3>${d.receipts.length ? d.receipts.map((p) => `<div class="ledger-item"><div><p>GH₵ ${cash(p.amount_minor)} · ${esc(p.source.replaceAll("_", " "))}</p><small>${esc(p.status)} · ${p.date ? fmtdate(p.date) : ""}</small>${p.unallocated_minor ? `<p class="small">GH₵ ${cash(p.unallocated_minor)} credit requires business review.</p>` : ""}</div><div><span class="mono">${esc(p.id.slice(0, 8))}</span><br><a class="muted-link" href="/api/public/${token}/receipts/${p.id}/pdf">Download PDF acknowledgement</a></div></div>`).join("") : '<p class="small subtle">Your acknowledgement will appear after a payment is recorded or verified.</p>'}</article><p class="public-footer">A private link for this debt only. No account or app installation required.<br>Sika Ledger prototype · Ghana cedis (GHS)</p></main>`;
+  app.innerHTML = `<main class="public-wrap">${brand()}<article class="public-card"><div class="record-meta"><span class="eyebrow">Private payment page</span>${badge(d.status)}</div><h1>${esc(d.business_name)}</h1><p class="subtle small">For ${esc(d.name)} · ${esc(d.description)}</p><div class="detail-amount"><small>GH₵</small> ${cash(d.balance_minor)}</div><p class="subtle small">Outstanding · Original due date ${fmtdate(d.due_date)}</p><dl class="detail-list section-gap"><div><dt>Original sale</dt><dd>GH₵ ${cash(d.principal_minor)}</dd></div><div><dt>Repayments recorded</dt><dd>GH₵ ${cash(d.paid_minor)}</dd></div></dl>${d.disputed ? '<div class="info">This balance is under review. New checkout and reminders are suspended.</div>' : d.balance_minor > 0 ? `<form id="checkout-form">${field("How much would you like to pay? (GHS)", "amount", "number", String(d.balance_minor / 100), 'required min="0.01" step="0.01" max="' + d.balance_minor / 100 + '"')}<div class="field"><label for="pay-mode">${config.paystack_live_configured ? "Payment method" : "Test payment method"}</label><select id="pay-mode" name="mode">${config.paystack_test_configured ? '<option value="paystack_test">Paystack TEST checkout</option>' : ""}</select></div><div class="form-error" role="alert"></div><button type="submit" class="btn" ${!config.paystack_test_configured && !config.paystack_live_configured ? "disabled" : ""}>Continue to checkout ${icon("arrow")}</button></form>` : '<div class="info">This debt is settled. Thank you.</div>'}<button class="text-btn section-gap" id="dispute-link">Incorrect balance or wrong number?</button><h3 class="section-gap">Repayment acknowledgements</h3>${d.receipts.length ? d.receipts.map((p) => `<div class="ledger-item"><div><p>GH₵ ${cash(p.amount_minor)} · ${esc(p.source.replaceAll("_", " "))}</p><small>${esc(p.status)} · ${p.date ? fmtdate(p.date) : ""}</small>${p.unallocated_minor ? `<p class="small">GH₵ ${cash(p.unallocated_minor)} credit requires business review.</p>` : ""}</div><div><span class="mono">${esc(p.id.slice(0, 8))}</span><br><a class="muted-link" href="/api/public/${token}/receipts/${p.id}/pdf">Download PDF acknowledgement</a></div></div>`).join("") : '<p class="small subtle">Your acknowledgement will appear after a payment is recorded or verified.</p>'}</article><p class="public-footer">A private link for this debt only. No account or app installation required.<br>Sika Ledger prototype · Ghana cedis (GHS)</p></main>`;
   if (d.business_contact) {
     $(".public-card h1").insertAdjacentHTML(
       "afterend",
@@ -1012,16 +1012,11 @@ async function paymentPage(token) {
     );
   }
   describePaystackCheckout("#pay-mode");
-  const paymentDisclosure = $(".public-card .info.warning");
-  if (paymentDisclosure) {
-    if (config.paystack_live_configured) {
-      paymentDisclosure.textContent =
-        "Paystack LIVE moves real money. Enter payment details only on Paystack’s secure checkout. Sika Ledger never asks for your PIN, CVV or OTP.";
-    } else {
-      paymentDisclosure.className = "small subtle page-note";
-      paymentDisclosure.textContent = "Test checkout — no money moves.";
-    }
-  }
+  if (config.paystack_live_configured && $("#checkout-form"))
+    $("#checkout-form").insertAdjacentHTML(
+      "beforebegin",
+      '<div class="info warning">Paystack LIVE moves real money. Enter payment details only on Paystack’s secure checkout. Sika Ledger never asks for your PIN, CVV or OTP.</div>',
+    );
   addLiveCheckout(
     "#pay-mode",
     "#checkout-form button[type=submit]",
@@ -1048,7 +1043,7 @@ async function paymentPage(token) {
       } else if (result.mode === "simulation") {
         openModal(
           "Simulate a repayment",
-          `<p class="small subtle page-note">Demo only — no money moves.</p><p>Apply a simulated payment of <strong>GH₵ ${esc(data.amount)}</strong> to this test debt?</p><div class="modal-footer"><button class="btn" id="simulate-confirm">Confirm simulation</button></div>`,
+          `<p class="small subtle page-note">Demo only: no money moves.</p><p>Apply a simulated payment of <strong>GH₵ ${esc(data.amount)}</strong> to this test debt?</p><div class="modal-footer"><button class="btn" id="simulate-confirm">Confirm simulation</button></div>`,
         );
         $("#simulate-confirm").onclick = async (e) => {
           e.target.disabled = true;
@@ -1108,7 +1103,7 @@ async function paymentPage(token) {
 }
 async function contributionPage(token) {
   const d = await api("/susu-public/" + token);
-  app.innerHTML = `<main class="public-wrap">${brand()}<article class="public-card"><span class="eyebrow">Private susu contribution page</span><h1>${esc(d.business_name)}</h1><p class="subtle small">${esc(d.name)} · ${esc(d.label)}</p><div class="detail-amount"><small>GH₵</small> ${cash(d.balance_minor)}</div><p class="subtle small">Recorded savings balance · Daily target GH₵ ${cash(d.daily_target_minor)}</p><div class="info warning">Test payments only. This contribution increases the savings record and does not repay a trade debt. No real funds move.</div><form id="contribution-form">${field("Contribution amount (GHS)", "amount", "number", String(d.daily_target_minor / 100), 'required min="0.01" max="1000000" step="0.01"')}<div class="field"><label for="contribution-mode">Test payment method</label><select id="contribution-mode" name="mode">${config.demo_mode ? '<option value="simulation">Demo simulator</option>' : ""}${config.paystack_test_configured ? '<option value="paystack_test">Paystack TEST MoMo</option>' : ""}</select></div><div class="form-error" role="alert"></div><button class="btn" type="submit" ${!config.demo_mode && !config.paystack_test_configured ? "disabled" : ""}>Start test contribution</button></form><h3 class="section-gap">Confirmed contribution acknowledgements</h3>${d.receipts.length ? d.receipts.map((p) => `<div class="ledger-item"><div><p>GH₵ ${cash(p.amount_minor)} · ${esc(p.source.replaceAll("_", " "))}</p><small>${p.date ? fmtdate(p.date) : ""}</small></div><div><span class="mono">${esc(p.id.slice(0, 8))}</span><br><a class="muted-link" href="/api/susu-public/${token}/receipts/${p.id}.pdf">Download PDF</a></div></div>`).join("") : '<p class="small subtle">No online contributions recorded yet.</p>'}</article><p class="public-footer">Share this link privately. No account is required.</p></main>`;
+  app.innerHTML = `<main class="public-wrap">${brand()}<article class="public-card"><span class="eyebrow">Private susu contribution page</span><h1>${esc(d.business_name)}</h1><p class="subtle small">${esc(d.name)} · ${esc(d.label)}</p><div class="detail-amount"><small>GH₵</small> ${cash(d.balance_minor)}</div><p class="subtle small">Recorded savings balance · Daily target GH₵ ${cash(d.daily_target_minor)}</p><form id="contribution-form">${field("Contribution amount (GHS)", "amount", "number", String(d.daily_target_minor / 100), 'required min="0.01" max="1000000" step="0.01"')}<div class="field"><label for="contribution-mode">${config.paystack_live_configured ? "Payment method" : "Test payment method"}</label><select id="contribution-mode" name="mode">${config.paystack_test_configured ? '<option value="paystack_test">Paystack TEST checkout</option>' : ""}</select></div><div class="form-error" role="alert"></div><button class="btn" type="submit" ${!config.paystack_test_configured && !config.paystack_live_configured ? "disabled" : ""}>Continue to checkout</button></form><h3 class="section-gap">Confirmed contribution acknowledgements</h3>${d.receipts.length ? d.receipts.map((p) => `<div class="ledger-item"><div><p>GH₵ ${cash(p.amount_minor)} · ${esc(p.source.replaceAll("_", " "))}</p><small>${p.date ? fmtdate(p.date) : ""}</small></div><div><span class="mono">${esc(p.id.slice(0, 8))}</span><br><a class="muted-link" href="/api/susu-public/${token}/receipts/${p.id}.pdf">Download PDF</a></div></div>`).join("") : '<p class="small subtle">No online contributions recorded yet.</p>'}</article><p class="public-footer">Share this link privately. No account is required.</p></main>`;
   if (d.business_contact) {
     $(".public-card h1").insertAdjacentHTML(
       "afterend",
@@ -1116,17 +1111,11 @@ async function contributionPage(token) {
     );
   }
   describePaystackCheckout("#contribution-mode");
-  const contributionDisclosure = $(".public-card .info.warning");
-  if (contributionDisclosure) {
-    if (config.paystack_live_configured) {
-      contributionDisclosure.textContent =
-        "A live contribution moves real money and increases this savings record; it does not repay trade debt. Enter payment details only on Paystack’s secure checkout.";
-    } else {
-      contributionDisclosure.className = "small subtle page-note";
-      contributionDisclosure.textContent =
-        "Test contribution — no money moves and trade debt is unchanged.";
-    }
-  }
+  if (config.paystack_live_configured && $("#contribution-form"))
+    $("#contribution-form").insertAdjacentHTML(
+      "beforebegin",
+      '<div class="info warning">A live contribution moves real money and increases this savings record; it does not repay trade debt. Enter payment details only on Paystack’s secure checkout.</div>',
+    );
   addLiveCheckout(
     "#contribution-mode",
     "#contribution-form button[type=submit]",
@@ -1149,7 +1138,7 @@ async function contributionPage(token) {
     if (result.mode === "simulation") {
       openModal(
         "Simulate a susu contribution",
-        `<p class="small subtle page-note">Demo only — no money moves.</p><p>Add GH₵ ${esc(data.amount)} to this savings record?</p><div class="modal-footer"><button class="btn" id="confirm-contribution">Confirm simulation</button></div>`,
+        `<p class="small subtle page-note">Demo only: no money moves.</p><p>Add GH₵ ${esc(data.amount)} to this savings record?</p><div class="modal-footer"><button class="btn" id="confirm-contribution">Confirm simulation</button></div>`,
       );
       $("#confirm-contribution").onclick = async (e) => {
         e.target.disabled = true;
@@ -1380,7 +1369,7 @@ async function showBackups() {
     `<section class="panel"><div class="panel-head"><h2>${info.engine === "sqlite" ? "SQLite backup workflow" : "PostgreSQL recovery"}</h2></div><div class="record-card"><p>Full-instance backups include every business and account on this server. They are available to the server operator through the terminal, with no tenant download or restore endpoint.</p>${info.engine === "sqlite" ? `<ol class="workflow-steps"><li>Create a new archive in the project terminal:<pre class="code-block">.\\.venv\\Scripts\\python.exe -m app.backup create --output sika-backup.sikabackup</pre></li><li>Validate its checksum, schema, ledger database integrity and foreign keys:<pre class="code-block">.\\.venv\\Scripts\\python.exe -m app.backup inspect sika-backup.sikabackup</pre></li><li>Stop every app and worker process. Restore only after checking the destination filename:<pre class="code-block">.\\.venv\\Scripts\\python.exe -m app.backup restore sika-backup.sikabackup --confirm sika.db</pre></li><li>Restart and sign in. The tool preserves a safety backup before replacing an existing database. Restored sessions are revoked and queued work requires fresh review.</li></ol><p class="small subtle">Commands use DATABASE_URL from .env. Replace sika.db with its actual database filename. Archives contain personal records and password hashes; store them privately. See docs/BACKUP_RECOVERY.md for recovery and scheduled-backup setup.</p>` : "<p>Use your PostgreSQL host’s native backup and restore workflow, with the app and workers stopped for restoration. The SQLite archive tool rejects PostgreSQL URLs. See docs/BACKUP_RECOVERY.md.</p>"}</div></section>`;
 }
 function privacyPage() {
-  document.title = "Privacy notice — Sika Ledger";
+  document.title = "Privacy notice | Sika Ledger";
   app.innerHTML = `<main class="public-wrap privacy-wrap">${brand()}<article class="public-card privacy-card"><span class="eyebrow">Prototype privacy notice</span><h1>How Sika Ledger handles information</h1><p class="subtle small">Last updated 27 October 2026</p><p>Sika Ledger is a working prototype for businesses that record customer debt, repayments and susu savings. The business using Sika Ledger is responsible for the customer records it enters. The operator of this deployment maintains the application and database.</p><h2>Information recorded</h2><ul><li>Business and staff account details.</li><li>Customer names, phone numbers, debt descriptions, amounts, dates, repayment plans and savings records.</li><li>Manual, simulated or provider-test payment records, receipts and references.</li><li>Contact permission, reminders, disputes, wrong-number reports and audit records.</li></ul><h2>How it is used</h2><p>The information supports business records, balances, receipts, permitted reminders, test-payment reconciliation, duplicate prevention, dispute handling and an audit trail of important changes.</p><h2>Who may receive it</h2><p>Records are available to the business and its authorised staff. When enabled, Paystack receives test-checkout details and Arkesel receives sandbox SMS details. Gemini receives a request only after the merchant explicitly agrees; saved phone numbers and private-link tokens are excluded from generated context, but text typed into the request is sent. Hosting and database operators may process stored records to run the service.</p><h2>Retention in this prototype</h2><ul><li>Login sessions expire after 12 hours.</li><li>AI conversation history is kept for 24 hours.</li><li>Private payment and contribution links expire after 30 days unless renewed.</li><li>Other financial, contact and audit records have no automatic deletion workflow. They remain until the database operator removes them.</li></ul><p>Use fictional customer data while testing. A live operator must set and publish a lawful retention schedule before real use.</p><h2>Your choices</h2><p>Contact the business that sent you a private link to correct your details, dispute a balance, report a wrong number or withdraw SMS permission. This prototype does not yet provide self-service data export or deletion. A live operator must publish contact details and procedures for access, correction, deletion and objection requests.</p><h2>Security and private links</h2><p>The prototype uses hashed passwords and sessions, tenant-scoped records, expiring private links and audit logs. A private link gives access to one customer account, so do not share it. Sika Ledger will never ask for your MoMo PIN, password or one-time code.</p><h2>Test services and live use</h2><p>Payments and messages are test-only unless an operator deliberately changes the integrations. Provider privacy terms apply when their services are enabled. Before live use, the business and operator must confirm a lawful basis, publish operator contact details and comply with Ghana’s Data Protection Act, 2012 (Act 843). This notice describes the prototype and is not legal advice.</p></article><p class="public-footer"><a href="/">Return to Sika Ledger</a></p></main>`;
 }
 async function boot() {

@@ -368,19 +368,13 @@ function click(w, s) {
     () => contributor.document.querySelector("#contribution-form"),
     "private savings link",
   );
-  fill(contributor, "#contribution-form", { amount: "20", mode: "simulation" });
-  await wait(
-    () => contributor.document.querySelector("#confirm-contribution"),
-    "savings confirmation",
+  assert.equal(
+    contributor.document.querySelector('option[value="simulation"]'),
+    null,
   );
-  click(contributor, "#confirm-contribution");
-  await wait(
-    () =>
-      !contributor.document.querySelector("#modal").open &&
-      contributor.document
-        .querySelector(".detail-amount")
-        .textContent.includes("120.00"),
-    "online savings credited",
+  assert.equal(
+    contributor.document.querySelector("#contribution-form button").disabled,
+    true,
   );
   assert.equal(
     JSON.parse((await request("/api/debts/" + debt.id)).text).balance_minor,
@@ -403,18 +397,8 @@ function click(w, s) {
   const customer = windowAt("/pay/" + debt.public_token);
   const pd = customer.document;
   await wait(() => pd.querySelector("#checkout-form"), "public payment page");
-  fill(customer, "#checkout-form", { amount: "100", mode: "simulation" });
-  await wait(
-    () => pd.querySelector("#simulate-confirm"),
-    "simulation confirmation",
-  );
-  click(customer, "#simulate-confirm");
-  await wait(
-    () =>
-      !pd.querySelector("#modal").open &&
-      pd.querySelector(".detail-amount").textContent.includes("200.00"),
-    "public partial payment",
-  );
+  assert.equal(pd.querySelector('option[value="simulation"]'), null);
+  assert.equal(pd.querySelector("#checkout-form button").disabled, true);
   click(customer, "#dispute-link");
   fill(customer, "#dispute-form", {
     reason: "incorrect_balance",
