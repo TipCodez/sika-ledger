@@ -189,6 +189,10 @@ function shell() {
       "",
     )}</nav><div class="side-bottom"><div class="side-note"><h3>Meet your assistant <span>✧</span></h3><p>Turn a quick note into a debt record with Gemini.</p><button class="text-btn" data-agent>Try the assistant →</button></div><nav class="nav"><button data-page="settings">${icon("settings")}Settings</button></nav><div class="profile"><div class="avatar">${esc(initials(user.name))}</div><div><strong class="small">${esc(user.actor_name || user.name)}</strong><div class="subtle small">${esc(user.role)}</div></div><button id="logout" aria-label="Sign out">${icon("logout")}</button></div></div></aside><div class="workspace"><header class="topbar"><div class="breadcrumb"><button class="mobile-menu" aria-label="Open navigation">${icon("menu")}</button><span>Workspace</span><span>/</span><strong id="crumb">${navNames[page]}</strong></div><div class="top-right"><span class="mode">PROTOTYPE · NO LIVE MONEY</span><span class="small subtle">${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span></div></header><main class="content" id="content"></main></div></div>`;
   $(".top-right .mode")?.remove();
+  $(".sidebar").insertAdjacentHTML(
+    "afterbegin",
+    '<button class="sidebar-close" aria-label="Close navigation">×</button>',
+  );
   $$("[data-page]").forEach(
     (b) =>
       (b.onclick = () => {
@@ -211,6 +215,7 @@ function shell() {
     auth();
   };
   $(".mobile-menu").onclick = () => $(".sidebar").classList.toggle("open");
+  $(".sidebar-close").onclick = () => $(".sidebar").classList.remove("open");
   renderPage().catch((e) => toast(e.message));
 }
 function $$(s, r = document) {
@@ -240,7 +245,7 @@ function debtTable(ds, tools = false) {
 }
 function tableRows(ds) {
   return ds.length
-    ? `<div class="table-scroll"><table><thead><tr><th>Customer</th><th>Original debt</th><th>Outstanding</th><th>Collection due</th><th>Status</th><th><span class="small">Action</span></th></tr></thead><tbody>${ds.map((d) => `<tr><td><div class="person"><div class="avatar">${esc(initials(d.name))}</div><div><strong>${esc(d.name)}</strong><small>${esc(d.phone)}</small></div></div></td><td>GH₵ ${cash(d.principal_minor)}</td><td class="money-cell">GH₵ ${cash(d.balance_minor)}</td><td>${fmtdate(d.collection_due_date)}${d.plan?.status === "active" ? '<small class="subtle"> · plan</small>' : ""}</td><td>${badge(d.status)}</td><td><button class="text-btn" data-detail="${d.id}" aria-label="View debt for ${esc(d.name)}">View →</button></td></tr>`).join("")}</tbody></table></div>`
+    ? `<div class="table-scroll"><table class="responsive-table"><thead><tr><th>Customer</th><th>Original debt</th><th>Outstanding</th><th>Collection due</th><th>Status</th><th><span class="small">Action</span></th></tr></thead><tbody>${ds.map((d) => `<tr><td data-label="Customer"><div class="person"><div class="avatar">${esc(initials(d.name))}</div><div><strong>${esc(d.name)}</strong><small>${esc(d.phone)}</small></div></div></td><td data-label="Original debt">GH₵ ${cash(d.principal_minor)}</td><td data-label="Outstanding" class="money-cell">GH₵ ${cash(d.balance_minor)}</td><td data-label="Collection due">${fmtdate(d.collection_due_date)}${d.plan?.status === "active" ? '<small class="subtle"> · plan</small>' : ""}</td><td data-label="Status">${badge(d.status)}</td><td data-label="Action"><button class="text-btn" data-detail="${d.id}" aria-label="View debt for ${esc(d.name)}">View →</button></td></tr>`).join("")}</tbody></table></div>`
     : `<div class="empty"><h3>${records.length ? "No debts match this view" : "Your next chapter starts here"}</h3><p>${records.length ? "Try another search or status filter." : "Record a credit sale to start tracking repayments."}</p>${!records.length ? `<div class="button-row empty-actions">${addButton()}${config.demo_mode ? '<button class="btn secondary" id="seed">Load fictional sample data</button>' : ""}</div>` : ""}</div>`;
 }
 function filtered() {
@@ -355,7 +360,7 @@ async function renderPage() {
         "Debts, savings and account history in one profile.",
         addButton(),
       ) +
-      `<section class="panel">${rows.length ? `<div class="table-scroll"><table><thead><tr><th>Customer</th><th>Phone</th><th>Trade debt</th><th>Savings</th><th></th></tr></thead><tbody>${rows.map((x) => `<tr><td>${esc(x.name)}</td><td>${esc(x.phone)}</td><td>GH₵ ${cash(x.outstanding_minor)}</td><td>GH₵ ${cash(x.savings_minor)}</td><td><button class="text-btn" data-customer="${x.id}">Open profile →</button></td></tr>`).join("")}</tbody></table></div>` : '<div class="empty">Customers appear after a debt or savings account is created.</div>'}</section>`;
+      `<section class="panel">${rows.length ? `<div class="table-scroll"><table class="responsive-table"><thead><tr><th>Customer</th><th>Phone</th><th>Trade debt</th><th>Savings</th><th></th></tr></thead><tbody>${rows.map((x) => `<tr><td data-label="Customer">${esc(x.name)}</td><td data-label="Phone">${esc(x.phone)}</td><td data-label="Trade debt">GH₵ ${cash(x.outstanding_minor)}</td><td data-label="Savings">GH₵ ${cash(x.savings_minor)}</td><td data-label="Action"><button class="text-btn" data-customer="${x.id}">Open profile →</button></td></tr>`).join("")}</tbody></table></div>` : '<div class="empty">Customers appear after a debt or savings account is created.</div>'}</section>`;
     $$("[data-customer]").forEach(
       (b) =>
         (b.onclick = () => {
@@ -610,10 +615,10 @@ async function showReports(start = "", end = "") {
       "Period activity and current debt aging.",
       '<button class="btn secondary" id="print-report">Print report</button>',
     ) +
-    `<form id="report-range" class="button-row panel report-range">${field("From", "start", "date", r.start, "required")}${field("To", "end", "date", r.end, "required")}<button type="submit" class="btn">Apply dates</button><div class="form-error" role="alert"></div></form><section class="stats"><article class="stat"><div class="stat-top">Credit recorded in period</div><div class="number"><small>GH₵</small>${cash(r.new_credit_minor)}</div></article><article class="stat"><div class="stat-top">Net recorded repayments</div><div class="number"><small>GH₵</small>${cash(r.net_recorded_repayments_minor)}</div></article><article class="stat"><div class="stat-top">Period adjustments</div><div class="number"><small>GH₵</small>${cash(r.adjustments_minor)}</div></article><article class="stat primary"><div class="stat-top">Outstanding now</div><div class="number"><small>GH₵</small>${cash(r.outstanding_now_minor)}</div></article></section><p class="small subtle page-note">Repayments are shown net of reversals. Aging reflects balances on ${esc(r.aging_as_of)}.</p><div class="split"><section class="panel"><div class="panel-head"><h2>Current debt aging</h2></div><table><thead><tr><th>Age</th><th>Outstanding</th></tr></thead><tbody>${Object.entries(
+    `<form id="report-range" class="button-row panel report-range">${field("From", "start", "date", r.start, "required")}${field("To", "end", "date", r.end, "required")}<button type="submit" class="btn">Apply dates</button><div class="form-error" role="alert"></div></form><section class="stats"><article class="stat"><div class="stat-top">Credit recorded in period</div><div class="number"><small>GH₵</small>${cash(r.new_credit_minor)}</div></article><article class="stat"><div class="stat-top">Net recorded repayments</div><div class="number"><small>GH₵</small>${cash(r.net_recorded_repayments_minor)}</div></article><article class="stat"><div class="stat-top">Period adjustments</div><div class="number"><small>GH₵</small>${cash(r.adjustments_minor)}</div></article><article class="stat primary"><div class="stat-top">Outstanding now</div><div class="number"><small>GH₵</small>${cash(r.outstanding_now_minor)}</div></article></section><p class="small subtle page-note">Repayments are shown net of reversals. Aging reflects balances on ${esc(r.aging_as_of)}.</p><div class="split"><section class="panel"><div class="panel-head"><h2>Current debt aging</h2></div><table class="responsive-table"><thead><tr><th>Age</th><th>Outstanding</th></tr></thead><tbody>${Object.entries(
       r.aging,
     )
-      .map(([k, v]) => `<tr><td>${esc(k)}</td><td>GH₵ ${cash(v)}</td></tr>`)
+      .map(([k, v]) => `<tr><td data-label="Age">${esc(k)}</td><td data-label="Outstanding">GH₵ ${cash(v)}</td></tr>`)
       .join(
         "",
       )}</tbody></table></section><section class="panel"><div class="panel-head"><h2>Customer statements</h2></div>${unique.length ? unique.map((c) => `<article class="record-card"><div class="record-meta"><strong>${esc(c.name)}</strong><a class="muted-link" href="/api/reports/customers/${c.id}/statement.pdf">Download PDF statement</a></div></article>`).join("") : '<div class="empty">No customer debts recorded.</div>'}</section></div>`;
@@ -1143,7 +1148,7 @@ async function contributionPage(token) {
 }
 function planPanel(plan, publicView = false) {
   if (!plan) return "";
-  return `<section class="section-gap plan-panel"><div class="record-meta"><h3>Agreed repayment plan</h3>${badge(plan.status)}</div>${plan.status === "needs_review" ? '<div class="info warning">A correction or reversal changed the agreement basis. Reminders are suspended until the business reviews the plan.</div>' : ""}<div class="table-scroll"><table><thead><tr><th>Due</th><th>Agreed</th><th>Remaining</th><th>Status</th></tr></thead><tbody>${plan.instalments.map((i) => `<tr><td>${fmtdate(i.due_date)}</td><td>GH₵ ${cash(i.amount_minor)}</td><td>${plan.progress_available ? "GH₵ " + cash(i.remaining_minor) : "See current ledger"}</td><td>${badge(i.status)}</td></tr>`).join("")}</tbody></table></div>${!publicView && isOwner() && ["active", "needs_review"].includes(plan.status) ? '<button class="text-btn section-gap" id="cancel-plan">Cancel this schedule</button>' : ""}<p class="small subtle section-gap">Payments apply to the oldest instalment first. This schedule does not add interest or change the ledger balance.</p></section>`;
+  return `<section class="section-gap plan-panel"><div class="record-meta"><h3>Agreed repayment plan</h3>${badge(plan.status)}</div>${plan.status === "needs_review" ? '<div class="info warning">A correction or reversal changed the agreement basis. Reminders are suspended until the business reviews the plan.</div>' : ""}<div class="table-scroll"><table class="responsive-table"><thead><tr><th>Due</th><th>Agreed</th><th>Remaining</th><th>Status</th></tr></thead><tbody>${plan.instalments.map((i) => `<tr><td data-label="Due">${fmtdate(i.due_date)}</td><td data-label="Agreed">GH₵ ${cash(i.amount_minor)}</td><td data-label="Remaining">${plan.progress_available ? "GH₵ " + cash(i.remaining_minor) : "See current ledger"}</td><td data-label="Status">${badge(i.status)}</td></tr>`).join("")}</tbody></table></div>${!publicView && isOwner() && ["active", "needs_review"].includes(plan.status) ? '<button class="text-btn section-gap" id="cancel-plan">Cancel this schedule</button>' : ""}<p class="small subtle section-gap">Payments apply to the oldest instalment first. This schedule does not add interest or change the ledger balance.</p></section>`;
 }
 function planDialog(d) {
   const dateAt = (n) =>

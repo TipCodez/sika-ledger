@@ -1419,3 +1419,420 @@ code {
 .workflow-steps li {
   padding: 10px 0;
 }
+
+/* Responsive application layout */
+html,
+body,
+#app {
+  width: 100%;
+  max-width: 100%;
+  min-height: 100%;
+}
+body {
+  overflow-x: hidden;
+}
+.shell {
+  min-height: 100dvh;
+}
+.workspace,
+.content,
+.panel,
+.stack,
+.split,
+.status-grid,
+.record-card,
+.ledger-item > div {
+  min-width: 0;
+}
+.content {
+  width: 100%;
+}
+.record-card,
+.ledger-item,
+.record-meta,
+.panel-head,
+.setting-line {
+  overflow-wrap: anywhere;
+}
+.sidebar {
+  scrollbar-width: none;
+}
+.sidebar::-webkit-scrollbar {
+  display: none;
+}
+.sidebar-close {
+  display: none;
+}
+
+@media (max-width: 1050px) {
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .status-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 800px) {
+  body {
+    font-size: 15px;
+  }
+  .shell {
+    display: block;
+  }
+  .workspace {
+    width: 100%;
+  }
+  .sidebar {
+    inset: 0 auto 0 0;
+    width: min(86vw, 300px);
+    height: 100dvh;
+    padding: 24px 16px 20px;
+    z-index: 50;
+    box-shadow: 14px 0 50px #132b2540;
+  }
+  .sidebar.open {
+    display: flex;
+  }
+  .sidebar-close {
+    position: absolute;
+    top: 18px;
+    right: 14px;
+    display: grid;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+    border: 0;
+    border-radius: 10px;
+    background: #f1f5ef;
+    color: var(--ink);
+    font-size: 26px;
+    line-height: 1;
+  }
+  .sidebar .brand {
+    padding-right: 44px;
+  }
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    width: 100%;
+  }
+  .mobile-menu {
+    width: 44px;
+    height: 44px;
+    padding: 11px;
+    flex: none;
+  }
+  .breadcrumb {
+    min-width: 0;
+  }
+  .breadcrumb strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .content {
+    padding: 24px 20px 40px;
+  }
+  .grid-main,
+  .stack.side-stack {
+    display: flex;
+    flex-direction: column;
+  }
+  .split {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .report-range {
+    flex-wrap: wrap;
+  }
+  .report-range .field {
+    flex: 1 1 180px;
+  }
+  .btn,
+  .btn.tiny,
+  .text-btn,
+  .nav button {
+    min-height: 44px;
+  }
+  .field input,
+  .field select,
+  .field textarea {
+    min-height: 46px;
+    font-size: 16px;
+  }
+  .check {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+}
+
+@media (max-width: 680px) {
+  .page-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+  .page-head > .button-row {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .page-head .btn {
+    flex: 1 1 150px;
+    white-space: normal;
+  }
+  .page-head .secondary {
+    display: inline-flex;
+  }
+  .panel-head,
+  .record-meta,
+  .setting-line {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .record-meta > :last-child,
+  .setting-line > :last-child {
+    flex: none;
+  }
+  .ledger-item {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .ledger-item .amount {
+    align-self: flex-start;
+    margin-left: 0;
+  }
+  .ledger-item > div:last-child {
+    width: 100%;
+  }
+  .table-scroll {
+    width: 100%;
+    overflow: visible;
+  }
+  .responsive-table,
+  .responsive-table tbody,
+  .responsive-table tr,
+  .responsive-table td {
+    display: block;
+    width: 100%;
+    white-space: normal;
+  }
+  .responsive-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .responsive-table tr {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .responsive-table tbody tr:last-child {
+    border-bottom: 0;
+  }
+  .responsive-table td,
+  .responsive-table tbody tr:last-child td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 8px 0;
+    border: 0;
+    text-align: right;
+  }
+  .responsive-table td::before {
+    content: attr(data-label);
+    flex: 0 0 40%;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 650;
+    text-align: left;
+  }
+  .responsive-table td > * {
+    margin-left: auto;
+  }
+  .responsive-table .person {
+    justify-content: flex-end;
+    text-align: left;
+  }
+  .report-range {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .report-range .field,
+  .report-range .btn,
+  .report-range .form-error {
+    width: 100%;
+  }
+  .filters {
+    width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+  .filters button {
+    min-height: 40px;
+    flex: none;
+  }
+  .search,
+  .table-tools .search {
+    width: 100%;
+    max-width: none;
+  }
+  .collection-chart {
+    gap: 7px;
+    padding-inline: 0;
+  }
+  .chart-column {
+    font-size: 9px;
+  }
+  .mini-item {
+    flex-wrap: wrap;
+  }
+  .mini-item .amount {
+    margin-left: auto;
+  }
+  .form-panel {
+    max-width: none;
+    padding: 20px;
+  }
+  .proposal dl,
+  .detail-list {
+    grid-template-columns: 1fr;
+  }
+  dialog {
+    width: calc(100vw - 16px);
+    max-width: none;
+    max-height: calc(100dvh - 16px);
+    border-radius: 14px;
+  }
+  .modal-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #fff;
+  }
+  .modal-head button {
+    width: 44px;
+    height: 44px;
+    flex: none;
+  }
+  .modal-footer {
+    flex-direction: column;
+  }
+  .modal-footer .btn,
+  .modal-body form > .btn {
+    width: 100%;
+  }
+  .public-wrap {
+    width: 100%;
+    margin: 24px auto;
+    padding: 0 14px;
+  }
+  .public-card {
+    padding: 22px 18px;
+    border-radius: 12px;
+  }
+  .public-card h1 {
+    font-size: 24px;
+  }
+  .public-card .detail-amount,
+  .detail-amount {
+    font-size: clamp(29px, 10vw, 36px);
+    overflow-wrap: anywhere;
+  }
+  .auth-main {
+    padding: 30px 20px;
+  }
+  .auth-art {
+    padding: 26px 22px;
+  }
+  .auth-art h1 {
+    font-size: 32px;
+  }
+}
+
+@media (max-width: 480px) {
+  .topbar {
+    padding: 0 14px;
+  }
+  .content {
+    padding: 20px 12px 36px;
+  }
+  .stats {
+    grid-template-columns: 1fr;
+  }
+  .stat {
+    padding: 18px;
+  }
+  .page-head h1 {
+    font-size: 25px;
+  }
+  .page-head p,
+  .panel-head p,
+  .record-card p,
+  .ledger-item p {
+    font-size: 13px;
+  }
+  .panel-head,
+  .panel-body,
+  .record-card {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .button-row {
+    width: 100%;
+  }
+  .button-row .btn {
+    flex: 1 1 140px;
+  }
+  .setting-line {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .empty {
+    padding: 36px 18px;
+  }
+  .privacy-card {
+    font-size: 14px;
+  }
+  #toast {
+    bottom: 14px;
+    width: calc(100vw - 24px);
+    padding: 12px 16px;
+    text-align: center;
+  }
+}
+
+@media (max-width: 360px) {
+  .content {
+    padding-inline: 10px;
+  }
+  .page-head .btn,
+  .button-row .btn {
+    width: 100%;
+    flex-basis: 100%;
+  }
+  .responsive-table td {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+    text-align: left;
+  }
+  .responsive-table td::before {
+    flex-basis: auto;
+  }
+  .responsive-table td > * {
+    margin-left: 0;
+  }
+  .responsive-table .person {
+    justify-content: flex-start;
+  }
+}
