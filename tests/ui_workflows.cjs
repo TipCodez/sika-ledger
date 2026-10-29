@@ -148,7 +148,6 @@ function click(w, s) {
     "settings",
     "team",
     "branding",
-    "backups",
     "susu",
   ]) {
     click(w, `[data-page="${p}"]`);
@@ -160,13 +159,12 @@ function click(w, s) {
             customers: "Customers",
             reminders: "Reminders",
             disputes: "Disputes",
-            recovery: "Payment recovery",
+            recovery: "Payment review",
             reports: "Reports",
             audit: "Activity log",
             settings: "Settings",
             team: "Team",
             branding: "Business branding",
-            backups: "Backup & recovery",
             susu: "Susu savings",
           }[p] && !doc.querySelector("#content .loading"),
       "nav " + p,
@@ -319,12 +317,6 @@ function click(w, s) {
   await wait(
     () => doc.querySelector("#toast").textContent.includes("Branding saved"),
     "branding saved",
-  );
-  click(w, '[data-page="backups"]');
-  await wait(
-    () =>
-      doc.querySelector("#content").textContent.includes("app.backup restore"),
-    "backup recovery instructions",
   );
   click(w, '[data-page="team"]');
   await wait(() => doc.querySelector("#new-collector"), "team management");

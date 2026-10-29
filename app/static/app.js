@@ -47,6 +47,13 @@ const cash = (n) =>
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+const paymentMethod = (source) => {
+  if (String(source).startsWith("paystack_") || source === "simulation")
+    return "Online payment";
+  if (source === "direct_momo") return "Mobile money";
+  if (source === "cash") return "Cash";
+  return String(source || "Payment").replaceAll("_", " ");
+};
 const initials = (n) =>
   n
     .split(/\s+/)
@@ -157,7 +164,7 @@ const navNames = {
   susu: "Susu savings",
   disputes: "Disputes",
   audit: "Activity log",
-  recovery: "Payment recovery",
+  recovery: "Payment review",
   reports: "Reports",
   team: "Team",
   branding: "Business branding",
@@ -170,7 +177,7 @@ function shell() {
   )
     .filter(
       ([k]) =>
-        k !== "settings" &&
+        !["settings", "backups"].includes(k) &&
         (isOwner() ||
           !["audit", "recovery", "team", "branding", "backups"].includes(k)),
     )
@@ -318,13 +325,7 @@ async function renderPage() {
         `<a class="btn secondary" href="/api/export/debts.csv">Export records</a>${addButton()}`,
       ) +
       stats() +
-      `<div class="grid-main"><div class="stack"><section class="panel"><div class="panel-head"><div><h2>Where things stand</h2><p class="subtle">Current balances and net repayments, in Ghana cedis.</p></div><span class="legend"><span class="dot"></span>From your ledger</span></div><div class="panel-body"><div class="collection-chart">${groups.map((g, i) => `<div class="chart-column"><span class="chart-value">${cash(vals[i])}</span><div class="chart-bar" data-height="${Math.max(2, Math.round((vals[i] / max) * 105))}"></div><span>${g}</span></div>`).join("")}</div></div></section>${debtTable(records.slice(0, 5))}</div><div class="stack side-stack"><section class="panel agent-card"><div class="panel-body agent-body"><div class="agent-glyph">✧</div><div class="eyebrow">Gemini assistant</div><h2>A note is all it takes.</h2><p>Describe a credit sale. Review the details. Add it to your debt book.</p><div class="agent-example">“Kofi bought GH₵600 of rice, paid GH₵200, and will pay the rest next Friday.”</div><button class="btn" data-agent>Ask your assistant ${icon("arrow")}</button><p class="small">${config.gemini_configured ? "Connected · confirmation required" : "API key needed · manual entry available"}</p></div></section><section class="panel"><div class="panel-head"><div><h2>Coming up</h2><p class="subtle">Upcoming and overdue repayments</p></div>${icon("reminders")}</div><div class="panel-body mini-list">${due.length ? due.map((d) => `<div class="mini-item"><div class="avatar">${esc(initials(d.name))}</div><div><strong class="small">${esc(d.name)}</strong><br><small>${fmtdate(d.collection_due_date)}</small></div><div class="amount">GH₵ ${cash(d.plan?.status === "active" ? d.plan.next_due_minor : d.balance_minor)}</div></div>`).join("") : '<p class="subtle small">Your repayment schedule will appear here.</p>'}</div></section></div></div><div class="footer-note"><span>Every repayment has a record. Every balance has a history.</span><span>GHS · Africa/Accra · Prototype v0.4</span></div>`;
-    $(".agent-card h2", c).textContent = "Add a credit sale faster";
-    $(".agent-card h2", c).nextElementSibling.textContent =
-      "Describe the sale, review the details, then save it.";
-    const footerParts = $$(".footer-note span", c);
-    footerParts[0].textContent = "Balances update from your ledger.";
-    footerParts[1].textContent = "GHS · Africa/Accra";
+      `<div class="grid-main"><div class="stack"><section class="panel"><div class="panel-head"><div><h2>Where things stand</h2><p class="subtle">Current balances and net repayments, in Ghana cedis.</p></div><span class="legend"><span class="dot"></span>From your ledger</span></div><div class="panel-body"><div class="collection-chart">${groups.map((g, i) => `<div class="chart-column"><span class="chart-value">${cash(vals[i])}</span><div class="chart-bar" data-height="${Math.max(2, Math.round((vals[i] / max) * 105))}"></div><span>${g}</span></div>`).join("")}</div></div></section>${debtTable(records.slice(0, 5))}</div><div class="stack side-stack"><section class="panel agent-card"><div class="panel-body agent-body"><div class="agent-glyph">✧</div><div class="eyebrow">Gemini assistant</div><h2>Add a credit sale faster</h2><p>Describe the sale, review the details, then save it.</p><div class="agent-example">“Kofi bought GH₵600 of rice, paid GH₵200, and will pay the rest next Friday.”</div><button class="btn" data-agent>Ask your assistant ${icon("arrow")}</button><p class="small">${config.gemini_configured ? "Ready to use · confirmation required" : "Assistant unavailable · manual entry available"}</p></div></section><section class="panel"><div class="panel-head"><div><h2>Coming up</h2><p class="subtle">Upcoming and overdue repayments</p></div>${icon("reminders")}</div><div class="panel-body mini-list">${due.length ? due.map((d) => `<div class="mini-item"><div class="avatar">${esc(initials(d.name))}</div><div><strong class="small">${esc(d.name)}</strong><br><small>${fmtdate(d.collection_due_date)}</small></div><div class="amount">GH₵ ${cash(d.plan?.status === "active" ? d.plan.next_due_minor : d.balance_minor)}</div></div>`).join("") : '<p class="subtle small">Your repayment schedule will appear here.</p>'}</div></section></div></div><div class="footer-note"><span>Balances update from your ledger.</span><span>GHS · Africa/Accra</span></div>`;
     $$("[data-height]").forEach(
       (b) => (b.style.height = b.dataset.height + "px"),
     );
@@ -382,10 +383,10 @@ async function renderPage() {
     c.innerHTML =
       heading(
         "Friendly follow-ups",
-        "Prepare and track reminder processing around repayment dates.",
+        "Prepare and send reminders around repayment dates.",
         '<button class="btn" id="preview-reminders">Prepare today’s previews</button>',
       ) +
-      `<p class="small subtle page-note">Messages are prepared only for eligible customers who have granted SMS permission.</p><section class="panel">${rows.length ? rows.map((r) => `<article class="record-card"><div class="record-meta"><span>${fmtdate(r.created_at)}</span>${badge(r.status)}</div><p>${esc(r.body)}</p><span class="small subtle">${r.status === "stale" ? "Balance or contact state changed. Prepare a new preview." : config.sms_mode === "arkesel_live" ? "Check the delivery status below." : "Preview or sandbox status"}</span>${r.status === "preview" ? `<div class="section-gap"><button class="btn secondary tiny" data-queue-reminder="${r.id}">${config.sms_mode === "dry_run" ? "Queue dry run" : config.sms_mode === "arkesel_live" ? "Send SMS" : "Queue sandbox message"}</button></div>` : ""}${(r.attempts || []).map((a) => `<div class="small subtle section-gap">${esc(a.mode)} · ${esc(a.status)}${a.provider_id ? ` · ID ${esc(a.provider_id)}` : ""}${a.error ? `<br>${esc(a.error)}` : ""}${a.delivery_report ? `<br><strong>Delivery status: ${esc(a.delivery_report.status)}</strong>` : ""}</div>`).join("")}</article>`).join("") : '<div class="empty"><h3>No reminder previews yet</h3><p>Prepare today’s previews to see eligible messages.</p></div>'}</section>`;
+      `<p class="small subtle page-note">Messages are prepared only for customers who have granted SMS permission.</p><section class="panel">${rows.length ? rows.map((r) => `<article class="record-card"><div class="record-meta"><span>${fmtdate(r.created_at)}</span>${badge(r.status)}</div><p>${esc(r.body)}</p><span class="small subtle">${r.status === "stale" ? "Customer details changed. Prepare a new preview." : config.sms_mode === "arkesel_live" ? "Delivery updates appear here." : "Ready to review"}</span>${r.status === "preview" ? `<div class="section-gap"><button class="btn secondary tiny" data-queue-reminder="${r.id}">${config.sms_mode === "arkesel_live" ? "Send SMS" : "Save reminder"}</button></div>` : ""}${(r.attempts || []).map((a) => `<div class="small subtle section-gap">${a.delivery_report ? `<strong>Delivery: ${esc(a.delivery_report.status)}</strong>` : esc(a.status)}${a.error ? "<br>Could not send. Please try again." : ""}</div>`).join("")}</article>`).join("") : '<div class="empty"><h3>No reminders prepared yet</h3><p>Prepare today’s reminders to see eligible messages.</p></div>'}</section>`;
     $$("[data-queue-reminder]").forEach(
       (b) =>
         (b.onclick = async () => {
@@ -401,8 +402,8 @@ async function renderPage() {
               config.sms_mode === "arkesel_live"
                 ? "Queued for SMS delivery during reminder hours."
                 : config.sms_mode === "arkesel_sandbox"
-                  ? "Queued in the SMS sandbox."
-                  : "Dry run queued. No SMS will be sent.",
+                  ? "Reminder saved for review."
+                  : "Reminder saved. No SMS was sent.",
             );
           } catch (e) {
             toast(e.message);
@@ -454,17 +455,17 @@ async function renderPage() {
         "Activity log",
         "A traceable history of changes in your business account.",
       ) +
-      `<section class="panel">${rows.length ? rows.map((r) => `<div class="record-card"><div class="record-meta"><strong>${esc(r.action.replaceAll(".", " · "))}</strong><span>${fmtdate(r.created_at)} ${new Date(r.created_at).toLocaleTimeString("en-GB")}</span></div><p class="mono">${esc(r.entity_id)}</p>${r.actor_name ? `<p class="small subtle">By ${esc(r.actor_name)} · ${esc(r.actor_role)}</p>` : '<p class="small subtle">System or earlier release</p>'}${r.detail ? `<span class="small subtle">${esc(r.detail)}</span>` : ""}</div>`).join("") : '<div class="empty">No activity yet.</div>'}</section>`;
+      `<section class="panel">${rows.length ? rows.map((r) => `<div class="record-card"><div class="record-meta"><strong>${esc(r.action.replaceAll(".", " · ").replaceAll("_", " "))}</strong><span>${fmtdate(r.created_at)} ${new Date(r.created_at).toLocaleTimeString("en-GB")}</span></div>${r.actor_name ? `<p class="small subtle">By ${esc(r.actor_name)} · ${esc(r.actor_role)}</p>` : '<p class="small subtle">Automatic update</p>'}</div>`).join("") : '<div class="empty">No activity yet.</div>'}</section>`;
     return;
   }
   if (page === "recovery") {
     const rows = await api("/payment-recovery");
     c.innerHTML =
       heading(
-        "Payment recovery",
-        "Inspect pending checkouts and record reviews of excess payments.",
+        "Payment review",
+        "Review pending payments and customer credit.",
       ) +
-      `<p class="small subtle page-note">Review pending payments and unallocated customer credit.</p><section class="panel">${rows.length ? rows.map((p) => `<article class="record-card"><div class="record-meta"><h3>${esc(p.name)} · ${esc(p.kind)}</h3>${badge(p.status)}</div><p>GH₵ ${cash(p.amount_minor)} · ${esc(p.source.replaceAll("_", " "))}</p><p class="mono">${esc(p.reference)}</p>${p.unallocated_minor ? `<p>Unallocated credit: <strong>GH₵ ${cash(p.unallocated_minor)}</strong></p>` : ""}${p.review ? `<p class="small subtle">Review: ${esc(p.review.note)}</p>` : ""}<div class="button-row">${p.source.startsWith("paystack_") ? `<button class="btn tiny" data-reverify="${p.kind}/${p.id}">Verify with Paystack</button>` : '<span class="small subtle">Simulations are completed from the private payment page.</span>'}${p.unallocated_minor ? `<button class="btn secondary tiny" data-review-credit="${p.id}">Record credit review</button>` : ""}</div></article>`).join("") : '<div class="empty"><h3>No pending or excess payments to review</h3></div>'}</section>`;
+      `<section class="panel">${rows.length ? rows.map((p) => `<article class="record-card"><div class="record-meta"><h3>${esc(p.name)}</h3>${badge(p.status)}</div><p><strong>GH₵ ${cash(p.amount_minor)}</strong> · ${p.source.startsWith("paystack_") ? "Online payment" : "Recorded payment"}</p>${p.unallocated_minor ? `<p>Customer credit: <strong>GH₵ ${cash(p.unallocated_minor)}</strong></p>` : ""}${p.review ? `<p class="small subtle">Review: ${esc(p.review.note)}</p>` : ""}<div class="button-row">${p.source.startsWith("paystack_") ? `<button class="btn tiny" data-reverify="${p.kind}/${p.id}">Check payment status</button>` : '<span class="small subtle">Awaiting completion from the customer payment page.</span>'}${p.unallocated_minor ? `<button class="btn secondary tiny" data-review-credit="${p.id}">Record credit review</button>` : ""}</div></article>`).join("") : '<div class="empty"><h3>No payments need review</h3></div>'}</section>`;
     $$("[data-reverify]").forEach(
       (b) =>
         (b.onclick = async () => {
@@ -479,8 +480,8 @@ async function renderPage() {
             await renderPage();
             toast(
               r.balance_unchanged
-                ? "Provider status: " + r.status
-                : "Payment verified; allocation is idempotent.",
+                ? "Payment status: " + r.status.replaceAll("_", " ")
+                : "Payment confirmed and balance updated.",
             );
           } catch (e) {
             toast(e.message);
@@ -514,88 +515,36 @@ async function renderPage() {
     c.innerHTML =
       heading(
         "Your workspace settings",
-        "Manage connections and payment services.",
+        "Manage the services used by your business.",
       ) +
-      `<div class="status-grid"><section class="panel"><div class="panel-head"><h2>Connections</h2></div><div class="panel-body"><div class="setting-line"><div><h3>Gemini assistant</h3><p>${esc(config.gemini_model)}</p></div>${badge(config.gemini_configured ? "connected" : "not_connected")}</div><div class="setting-line"><div><h3>Paystack checkout</h3><p>${config.paystack_live_configured ? "Live payments enabled" : config.paystack_test_configured ? "Test payments enabled" : "Not connected"}</p></div>${badge(config.paystack_live_configured ? "live" : config.paystack_test_configured ? "test" : "not_connected")}</div><div class="setting-line"><div><h3>SMS reminders</h3><p>${config.sms_mode === "arkesel_live" ? "Live delivery" : config.sms_mode === "arkesel_sandbox" ? "Sandbox" : "Dry run"}</p></div>${badge(config.sms_mode)}</div><div class="setting-line"><div><h3>Background processing</h3><p>${config.background_worker ? "Running" : "Worker required"}</p></div>${badge(config.background_worker ? "enabled" : "not_running")}</div><div class="setting-line"><div><h3>Demo payments</h3><p>${config.demo_mode ? "Available" : "Off"}</p></div>${badge(config.demo_mode ? "enabled" : "disabled")}</div></div></section>${summary.unallocated_minor ? `<section class="panel"><div class="panel-head"><h2>Needs review</h2></div><div class="panel-body"><div class="info warning">Unallocated customer credit: <strong>GH₵ ${cash(summary.unallocated_minor)}</strong>. Review it before issuing a refund.</div><a class="btn secondary tiny" href="#" data-nav="recovery">Open payment recovery</a></div></section>` : ""}</div>`;
+      `<div class="status-grid"><section class="panel"><div class="panel-head"><h2>Business services</h2></div><div class="panel-body"><div class="setting-line"><div><h3>Gemini assistant</h3><p>${config.gemini_configured ? "Ready to help record debts" : "Not available"}</p></div>${badge(config.gemini_configured ? "ready" : "unavailable")}</div><div class="setting-line"><div><h3>Online payments</h3><p>${config.paystack_test_configured || config.paystack_live_configured ? "Ready to accept payments" : "Not available"}</p></div>${badge(config.paystack_test_configured || config.paystack_live_configured ? "ready" : "unavailable")}</div><div class="setting-line"><div><h3>SMS reminders</h3><p>${config.sms_mode === "arkesel_live" ? "Ready to send reminders" : "Preview mode"}</p></div>${badge(config.sms_mode === "arkesel_live" ? "ready" : "preview")}</div></div></section>${summary.unallocated_minor ? `<section class="panel"><div class="panel-head"><h2>Needs review</h2></div><div class="panel-body"><div class="info warning">Customer credit awaiting review: <strong>GH₵ ${cash(summary.unallocated_minor)}</strong>.</div><a class="btn secondary tiny" href="#" data-nav="recovery">Review payments</a></div></section>` : ""}</div>`;
     $("[data-nav=recovery]", c)?.addEventListener("click", (event) => {
       event.preventDefault();
       page = "recovery";
       shell();
     });
-    const paystackHeading = Array.from($$(".setting-line h3", c)).find(
-      (h) => h.textContent === "Paystack test checkout",
-    );
-    if (paystackHeading && config.paystack_live_configured) {
-      paystackHeading.textContent = "Paystack live collection";
-      paystackHeading.nextElementSibling.textContent =
-        "Real MoMo collection requires an active merchant settlement subaccount.";
-    }
     if (config.paystack_test_configured || config.paystack_live_configured) {
       const settlement = await api("/integrations/paystack/subaccount");
       c.insertAdjacentHTML(
         "beforeend",
         settlement.account
-          ? `<section class="panel section-gap"><div class="panel-head"><div><h2>Paystack settlement account</h2><p class="subtle">Only masked settlement details are stored locally.</p></div>${badge(settlement.account.status)}</div><div class="record-card"><p><strong>${esc(settlement.account.business_name)}</strong></p><p class="small subtle">${esc(settlement.account.account_name)} · ${esc(settlement.account.settlement_bank)} · ending ${esc(settlement.account.account_last4)}</p><p class="small subtle">Environment: ${esc(settlement.account.domain)}</p><button class="btn secondary tiny" id="refresh-subaccount">Refresh provider status</button></div></section>`
-          : `<section class="panel form-panel section-gap"><div class="panel-head"><div><h2>Link Paystack settlement account</h2><p class="subtle">The full account number is sent directly to Paystack and is not stored by Sika Ledger.</p></div></div><form id="subaccount-form">${field("Business name", "business_name", "text", user.name, 'required minlength="2" maxlength="100"')}${field("Paystack settlement bank or MoMo code", "settlement_bank", "text", "", 'required minlength="2" maxlength="30" pattern="[A-Za-z0-9_-]+"')}${field("Settlement account or MoMo number", "account_number", "text", "", 'required minlength="6" maxlength="30" inputmode="numeric" pattern="[0-9]+" autocomplete="off"')}${field("Contact name", "contact_name", "text", user.name, 'maxlength="100"')}${field("Contact email", "contact_email", "email", "", 'maxlength="254" autocomplete="email"')}${field("Contact phone", "contact_phone", "tel", "", 'maxlength="30" autocomplete="tel"')}<label class="check"><input type="checkbox" name="confirmed" value="true" required><span>I verified the settlement destination and authorize Paystack to settle this business’s payments there.</span></label><div class="form-error" role="alert"></div><button class="btn" type="submit">Create Paystack subaccount</button></form></section>`,
+          ? `<section class="panel section-gap"><div class="panel-head"><div><h2>Settlement account</h2><p class="subtle">Online payments are sent to this account.</p></div>${badge(settlement.account.status)}</div><div class="record-card"><p><strong>${esc(settlement.account.business_name)}</strong></p><p class="small subtle">${esc(settlement.account.account_name)} · ${esc(settlement.account.settlement_bank)} · ending ${esc(settlement.account.account_last4)}</p><button class="btn secondary tiny" id="refresh-subaccount">Check account status</button></div></section>`
+          : `<section class="panel form-panel section-gap"><div class="panel-head"><div><h2>Add settlement account</h2><p class="subtle">Choose where your online payments should be received.</p></div></div><form id="subaccount-form">${field("Business name", "business_name", "text", user.name, 'required minlength="2" maxlength="100"')}${field("Bank or mobile money provider code", "settlement_bank", "text", "", 'required minlength="2" maxlength="30" pattern="[A-Za-z0-9_-]+"')}${field("Account or mobile money number", "account_number", "text", "", 'required minlength="6" maxlength="30" inputmode="numeric" pattern="[0-9]+" autocomplete="off"')}${field("Contact name", "contact_name", "text", user.name, 'maxlength="100"')}${field("Contact email", "contact_email", "email", "", 'maxlength="254" autocomplete="email"')}${field("Contact phone", "contact_phone", "tel", "", 'maxlength="30" autocomplete="tel"')}<label class="check"><input type="checkbox" name="confirmed" value="true" required><span>I have checked these account details and approve this settlement destination.</span></label><div class="form-error" role="alert"></div><button class="btn" type="submit">Save settlement account</button></form></section>`,
       );
       if ($("#subaccount-form"))
         bindForm("#subaccount-form", async (data) => {
           data.confirmed = data.confirmed === "true";
           await api("/integrations/paystack/subaccount", "POST", data);
-          toast("Settlement account linked. Review its provider status.");
+          toast("Settlement account saved.");
           await renderPage();
         });
       if ($("#refresh-subaccount"))
         $("#refresh-subaccount").onclick = async () => {
           await api("/integrations/paystack/subaccount/refresh", "POST", {});
-          toast("Settlement status refreshed.");
+          toast("Account status updated.");
           await renderPage();
         };
     }
-    const jobs = await api("/integrations/webhooks");
-    c.insertAdjacentHTML(
-      "beforeend",
-      `<section class="panel section-gap"><div class="panel-head"><div><h2>Payment notification inbox</h2><p class="subtle">Stored notifications are verified by the worker before balances change.</p></div></div>${jobs.length ? jobs.map((j) => `<article class="record-card"><div class="record-meta"><strong class="mono">${esc(j.reference)}</strong>${badge(j.status)}</div><p class="small subtle">${j.attempts} verification attempt(s)${j.last_error ? ` · ${esc(j.last_error)}` : ""}</p>${["retry", "needs_review"].includes(j.status) ? `<button class="btn secondary tiny" data-retry-job="${j.id}">Request verification retry</button>` : ""}</article>`).join("") : '<div class="empty">No payment notifications received yet.</div>'}</section>`,
-    );
-    $$("[data-retry-job]").forEach(
-      (b) =>
-        (b.onclick = () =>
-          reasonDialog(
-            "Retry payment verification",
-            "Explain what you checked before retrying this notification.",
-            async (reason) => {
-              await api(
-                "/integrations/webhooks/" + b.dataset.retryJob + "/retry",
-                "POST",
-                { reason },
-              );
-              await renderPage();
-            },
-          )),
-    );
-    const smsJobs = await api("/integrations/sms-callbacks");
-    c.insertAdjacentHTML(
-      "beforeend",
-      `<section class="panel section-gap"><div class="panel-head"><div><h2>SMS callback reconciliation</h2><p class="subtle">Callback claims trigger authenticated provider lookups. Sandbox reports are not handset delivery evidence.</p></div>${badge(config.arkesel_callbacks ? "enabled" : "disabled")}</div>${smsJobs.length ? smsJobs.map((j) => `<article class="record-card"><div class="record-meta"><strong class="mono">${esc(j.provider_id)}</strong>${badge(j.status)}</div><p class="small subtle">Claimed: ${esc(j.claimed_status)} · ${j.attempts} lookup(s)${j.last_error ? ` · ${esc(j.last_error)}` : ""}</p>${["needs_review", "retry", "processed"].includes(j.status) ? `<button class="btn secondary tiny" data-retry-sms-job="${j.id}">Retry status lookup</button>` : ""}</article>`).join("") : '<div class="empty">No SMS callbacks received. Enable ARKESEL_CALLBACKS_ENABLED on a public HTTPS deployment to attach callback_url to new submissions.</div>'}</section>`,
-    );
-    $$("[data-retry-sms-job]").forEach(
-      (b) =>
-        (b.onclick = () =>
-          reasonDialog(
-            "Retry SMS status lookup",
-            "This retries message-status verification without resending the SMS.",
-            async (reason) => {
-              await api(
-                "/integrations/sms-callbacks/" +
-                  b.dataset.retrySmsJob +
-                  "/retry",
-                "POST",
-                { reason },
-              );
-              await renderPage();
-            },
-          )),
-    );
     return;
   }
   if (page === "susu") {
@@ -721,7 +670,7 @@ async function showDebt(id) {
     const d = await api("/debts/" + id);
     openModal(
       d.name,
-      `<div class="record-meta"><span>${esc(d.description)}</span>${badge(d.status)}</div><div class="detail-amount"><small>GH₵</small> ${cash(d.balance_minor)}</div><p class="subtle small">Outstanding balance${d.adjustments_minor ? ` · Corrections: GH₵ ${cash(d.adjustments_minor)}` : ""}</p><dl class="detail-list"><div><dt>Original sale</dt><dd>GH₵ ${cash(d.principal_minor)}</dd></div><div><dt>Repayments, net of reversals</dt><dd>GH₵ ${cash(d.paid_minor)}</dd></div><div><dt>Original due date</dt><dd>${fmtdate(d.due_date)}</dd></div><div><dt>Customer phone</dt><dd>${esc(d.phone)}</dd></div></dl><div class="button-row">${d.balance_minor > 0 ? '<button class="btn" id="record-payment">Record repayment</button>' : ""}<a class="btn secondary" target="_blank" rel="noopener" href="/pay/${d.public_token}">Open payment page ↗</a><button class="btn secondary" id="copy-link">Copy link</button>${isOwner() ? '<button class="text-btn" id="rotate-link">Replace private link</button>' : ""}${isOwner() && !d.cancelled ? '<button class="text-btn" id="correct-debt">Correct record</button>' : ""}${isOwner() ? `<button class="text-btn" id="pause-debt">${d.paused ? "Resume reminders" : "Pause reminders"}</button>` : ""}${isOwner() && d.balance_minor > 0 && !d.cancelled ? '<button class="btn secondary tiny" id="agree-plan">Agree repayment plan</button>' : ""}</div>${d.disputed ? '<div class="info warning">Customer dispute is open. Reminders and new checkout are suspended.</div>' : ""}${d.do_not_contact ? '<div class="info warning">This customer is opted out after a wrong-number report.</div>' : ""}<h3>Financial history</h3>${d.ledger.map((e) => `<div class="ledger-item"><div><p><strong>${esc(e.kind)}</strong> · ${esc(e.note)}</p><small>${fmtdate(e.created_at)}</small></div><span class="amount">${e.amount_minor < 0 ? "−" : "+"} GH₵ ${cash(Math.abs(e.amount_minor))}</span></div>`).join("")}<h3 class="section-gap">Repayment records</h3>${d.payments.length ? d.payments.map((p) => `<div class="ledger-item"><div><p>GH₵ ${cash(p.amount_minor)} · ${esc(p.source.replaceAll("_", " "))}</p><small>${esc(p.status)}${p.unallocated_minor ? ` · GH₵ ${cash(p.unallocated_minor)} unallocated` : ""}</small>${isOwner() && p.status === "confirmed" && !p.source.startsWith("paystack_") ? `<div><button class="text-btn" data-reverse="${p.id}">Reverse ledger entry</button></div>` : ""}</div><div><small class="mono">${esc(p.id.slice(0, 10))}</small>${["confirmed", "reversed"].includes(p.status) ? `<br><a class="muted-link" href="/api/payments/${p.id}/receipt.pdf">Download PDF acknowledgement</a>` : ""}</div></div>`).join("") : '<p class="small subtle">No repayments yet.</p>'}`,
+      `<div class="record-meta"><span>${esc(d.description)}</span>${badge(d.status)}</div><div class="detail-amount"><small>GH₵</small> ${cash(d.balance_minor)}</div><p class="subtle small">Outstanding balance${d.adjustments_minor ? ` · Corrections: GH₵ ${cash(d.adjustments_minor)}` : ""}</p><dl class="detail-list"><div><dt>Original sale</dt><dd>GH₵ ${cash(d.principal_minor)}</dd></div><div><dt>Repayments, net of reversals</dt><dd>GH₵ ${cash(d.paid_minor)}</dd></div><div><dt>Original due date</dt><dd>${fmtdate(d.due_date)}</dd></div><div><dt>Customer phone</dt><dd>${esc(d.phone)}</dd></div></dl><div class="button-row">${d.balance_minor > 0 ? '<button class="btn" id="record-payment">Record repayment</button>' : ""}<a class="btn secondary" target="_blank" rel="noopener" href="/pay/${d.public_token}">Open payment page ↗</a><button class="btn secondary" id="copy-link">Copy link</button>${isOwner() ? '<button class="text-btn" id="rotate-link">Replace private link</button>' : ""}${isOwner() && !d.cancelled ? '<button class="text-btn" id="correct-debt">Correct record</button>' : ""}${isOwner() ? `<button class="text-btn" id="pause-debt">${d.paused ? "Resume reminders" : "Pause reminders"}</button>` : ""}${isOwner() && d.balance_minor > 0 && !d.cancelled ? '<button class="btn secondary tiny" id="agree-plan">Agree repayment plan</button>' : ""}</div>${d.disputed ? '<div class="info warning">Customer dispute is open. Reminders and new checkout are suspended.</div>' : ""}${d.do_not_contact ? '<div class="info warning">This customer is opted out after a wrong-number report.</div>' : ""}<h3>Financial history</h3>${d.ledger.map((e) => `<div class="ledger-item"><div><p><strong>${esc(e.kind.replaceAll("_", " "))}</strong> · ${esc(e.note)}</p><small>${fmtdate(e.created_at)}</small></div><span class="amount">${e.amount_minor < 0 ? "−" : "+"} GH₵ ${cash(Math.abs(e.amount_minor))}</span></div>`).join("")}<h3 class="section-gap">Repayment records</h3>${d.payments.length ? d.payments.map((p) => `<div class="ledger-item"><div><p>GH₵ ${cash(p.amount_minor)} · ${esc(paymentMethod(p.source))}</p><small>${esc(p.status)}${p.unallocated_minor ? ` · GH₵ ${cash(p.unallocated_minor)} customer credit` : ""}</small>${isOwner() && p.status === "confirmed" && !p.source.startsWith("paystack_") ? `<div><button class="text-btn" data-reverse="${p.id}">Reverse ledger entry</button></div>` : ""}</div><div>${["confirmed", "reversed"].includes(p.status) ? `<a class="muted-link" href="/api/payments/${p.id}/receipt.pdf">Download PDF acknowledgement</a>` : ""}</div></div>`).join("") : '<p class="small subtle">No repayments yet.</p>'}`,
     );
     $(".modal-body", mc).insertAdjacentHTML(
       "beforeend",
@@ -958,7 +907,7 @@ function addLiveCheckout(selectId, buttonSelector, liveLabel) {
   if (!select) return;
   select.insertAdjacentHTML(
     "beforeend",
-    '<option value="paystack_live">Paystack LIVE: card, bank, MoMo and available methods</option>',
+    '<option value="paystack_live">Secure online payment: card, bank or MoMo</option>',
   );
   select.closest(".field").insertAdjacentHTML(
     "afterend",
@@ -993,18 +942,23 @@ function describePaystackCheckout(selectId) {
   const testOption = select.querySelector('option[value="paystack_test"]');
   if (testOption)
     testOption.textContent =
-      "Paystack TEST: card, bank, MoMo and available methods";
+      "Online payment: card, bank or MoMo";
   const label = select.closest(".field")?.querySelector("label");
-  if (label && config.paystack_live_configured) label.textContent = "Payment method";
+  if (label) label.textContent = "Payment method";
   if (testOption || config.paystack_live_configured)
     select.closest(".field").insertAdjacentHTML(
       "beforeend",
-      '<p class="small subtle">Paystack will show the payment channels enabled for this business and transaction. Availability can vary by account and country.</p>',
+      '<p class="small subtle">Choose card, bank or mobile money on the secure payment page.</p>',
     );
 }
 async function paymentPage(token) {
   const d = await api("/public/" + encodeURIComponent(token));
   app.innerHTML = `<main class="public-wrap">${brand()}<article class="public-card"><div class="record-meta"><span class="eyebrow">Private payment page</span>${badge(d.status)}</div><h1>${esc(d.business_name)}</h1><p class="subtle small">For ${esc(d.name)} · ${esc(d.description)}</p><div class="detail-amount"><small>GH₵</small> ${cash(d.balance_minor)}</div><p class="subtle small">Outstanding · Original due date ${fmtdate(d.due_date)}</p><dl class="detail-list section-gap"><div><dt>Original sale</dt><dd>GH₵ ${cash(d.principal_minor)}</dd></div><div><dt>Repayments recorded</dt><dd>GH₵ ${cash(d.paid_minor)}</dd></div></dl>${d.disputed ? '<div class="info">This balance is under review. New checkout and reminders are suspended.</div>' : d.balance_minor > 0 ? `<form id="checkout-form">${field("How much would you like to pay? (GHS)", "amount", "number", String(d.balance_minor / 100), 'required min="0.01" step="0.01" max="' + d.balance_minor / 100 + '"')}<div class="field"><label for="pay-mode">${config.paystack_live_configured ? "Payment method" : "Test payment method"}</label><select id="pay-mode" name="mode">${config.paystack_test_configured ? '<option value="paystack_test">Paystack TEST checkout</option>' : ""}</select></div><div class="form-error" role="alert"></div><button type="submit" class="btn" ${!config.paystack_test_configured && !config.paystack_live_configured ? "disabled" : ""}>Continue to checkout ${icon("arrow")}</button></form>` : '<div class="info">This debt is settled. Thank you.</div>'}<button class="text-btn section-gap" id="dispute-link">Incorrect balance or wrong number?</button><h3 class="section-gap">Repayment acknowledgements</h3>${d.receipts.length ? d.receipts.map((p) => `<div class="ledger-item"><div><p>GH₵ ${cash(p.amount_minor)} · ${esc(p.source.replaceAll("_", " "))}</p><small>${esc(p.status)} · ${p.date ? fmtdate(p.date) : ""}</small>${p.unallocated_minor ? `<p class="small">GH₵ ${cash(p.unallocated_minor)} credit requires business review.</p>` : ""}</div><div><span class="mono">${esc(p.id.slice(0, 8))}</span><br><a class="muted-link" href="/api/public/${token}/receipts/${p.id}/pdf">Download PDF acknowledgement</a></div></div>`).join("") : '<p class="small subtle">Your acknowledgement will appear after a payment is recorded or verified.</p>'}</article><p class="public-footer">A private link for this debt only. No account or app installation required.<br>Sika Ledger prototype · Ghana cedis (GHS)</p></main>`;
+  $$(".ledger-item", app).forEach((row, index) => {
+    const line = $("p", row);
+    if (line && d.receipts[index])
+      line.firstChild.nodeValue = `GH₵ ${cash(d.receipts[index].amount_minor)} · ${paymentMethod(d.receipts[index].source)}`;
+  });
   if (d.business_contact) {
     $(".public-card h1").insertAdjacentHTML(
       "afterend",
@@ -1093,7 +1047,7 @@ async function paymentPage(token) {
       toast(
         r.balance_unchanged
           ? "Payment is not yet successful. Check again shortly."
-          : "Test transaction verified by server.",
+          : "Payment confirmed.",
       );
       await paymentPage(token);
     } catch (e) {
@@ -1104,6 +1058,11 @@ async function paymentPage(token) {
 async function contributionPage(token) {
   const d = await api("/susu-public/" + token);
   app.innerHTML = `<main class="public-wrap">${brand()}<article class="public-card"><span class="eyebrow">Private susu contribution page</span><h1>${esc(d.business_name)}</h1><p class="subtle small">${esc(d.name)} · ${esc(d.label)}</p><div class="detail-amount"><small>GH₵</small> ${cash(d.balance_minor)}</div><p class="subtle small">Recorded savings balance · Daily target GH₵ ${cash(d.daily_target_minor)}</p><form id="contribution-form">${field("Contribution amount (GHS)", "amount", "number", String(d.daily_target_minor / 100), 'required min="0.01" max="1000000" step="0.01"')}<div class="field"><label for="contribution-mode">${config.paystack_live_configured ? "Payment method" : "Test payment method"}</label><select id="contribution-mode" name="mode">${config.paystack_test_configured ? '<option value="paystack_test">Paystack TEST checkout</option>' : ""}</select></div><div class="form-error" role="alert"></div><button class="btn" type="submit" ${!config.paystack_test_configured && !config.paystack_live_configured ? "disabled" : ""}>Continue to checkout</button></form><h3 class="section-gap">Confirmed contribution acknowledgements</h3>${d.receipts.length ? d.receipts.map((p) => `<div class="ledger-item"><div><p>GH₵ ${cash(p.amount_minor)} · ${esc(p.source.replaceAll("_", " "))}</p><small>${p.date ? fmtdate(p.date) : ""}</small></div><div><span class="mono">${esc(p.id.slice(0, 8))}</span><br><a class="muted-link" href="/api/susu-public/${token}/receipts/${p.id}.pdf">Download PDF</a></div></div>`).join("") : '<p class="small subtle">No online contributions recorded yet.</p>'}</article><p class="public-footer">Share this link privately. No account is required.</p></main>`;
+  $$(".ledger-item", app).forEach((row, index) => {
+    const line = $("p", row);
+    if (line && d.receipts[index])
+      line.textContent = `GH₵ ${cash(d.receipts[index].amount_minor)} · ${paymentMethod(d.receipts[index].source)}`;
+  });
   if (d.business_contact) {
     $(".public-card h1").insertAdjacentHTML(
       "afterend",
@@ -1173,8 +1132,8 @@ async function contributionPage(token) {
       );
       toast(
         r.balance_unchanged
-          ? "Test contribution is not yet successful."
-          : "Test contribution verified.",
+          ? "Contribution is still pending."
+          : "Contribution confirmed.",
       );
       await contributionPage(token);
     } catch (e) {
@@ -1299,7 +1258,11 @@ async function showTeam() {
     ) +
     `<div class="info">Collectors can view customer accounts, statements and reminder history. They cannot reverse payments, record payouts, change consent, manage plans, access integration settings or manage staff.</div><section class="panel">${rows.map((a) => `<article class="record-card"><div class="record-meta"><h3>${esc(a.name)}</h3>${badge(a.active ? a.role : "disabled")}</div><p class="small subtle">Login: ${esc(a.login)}</p>${a.role === "collector" ? `<div class="button-row"><button class="btn secondary tiny" data-staff-active="${a.id}" data-next="${!a.active}">${a.active ? "Disable access" : "Enable access"}</button><button class="text-btn" data-reset-staff="${a.id}">Reset password</button></div>` : ""}</article>`).join("")}</section>`;
   const teamSummary = $("#content > .info");
-  if (teamSummary) teamSummary.className = "small subtle page-note";
+  if (teamSummary) {
+    teamSummary.className = "small subtle page-note";
+    teamSummary.textContent =
+      "Collectors can manage customer records and reminders. Only owners can change payments, consent, staff and business settings.";
+  }
   $("#new-collector").onclick = () => {
     openModal(
       "Add collector",
@@ -1370,7 +1333,7 @@ async function showBackups() {
 }
 function privacyPage() {
   document.title = "Privacy notice | Sika Ledger";
-  app.innerHTML = `<main class="public-wrap privacy-wrap">${brand()}<article class="public-card privacy-card"><span class="eyebrow">Prototype privacy notice</span><h1>How Sika Ledger handles information</h1><p class="subtle small">Last updated 27 October 2026</p><p>Sika Ledger is a working prototype for businesses that record customer debt, repayments and susu savings. The business using Sika Ledger is responsible for the customer records it enters. The operator of this deployment maintains the application and database.</p><h2>Information recorded</h2><ul><li>Business and staff account details.</li><li>Customer names, phone numbers, debt descriptions, amounts, dates, repayment plans and savings records.</li><li>Manual, simulated or provider-test payment records, receipts and references.</li><li>Contact permission, reminders, disputes, wrong-number reports and audit records.</li></ul><h2>How it is used</h2><p>The information supports business records, balances, receipts, permitted reminders, test-payment reconciliation, duplicate prevention, dispute handling and an audit trail of important changes.</p><h2>Who may receive it</h2><p>Records are available to the business and its authorised staff. When enabled, Paystack receives test-checkout details and Arkesel receives sandbox SMS details. Gemini receives a request only after the merchant explicitly agrees; saved phone numbers and private-link tokens are excluded from generated context, but text typed into the request is sent. Hosting and database operators may process stored records to run the service.</p><h2>Retention in this prototype</h2><ul><li>Login sessions expire after 12 hours.</li><li>AI conversation history is kept for 24 hours.</li><li>Private payment and contribution links expire after 30 days unless renewed.</li><li>Other financial, contact and audit records have no automatic deletion workflow. They remain until the database operator removes them.</li></ul><p>Use fictional customer data while testing. A live operator must set and publish a lawful retention schedule before real use.</p><h2>Your choices</h2><p>Contact the business that sent you a private link to correct your details, dispute a balance, report a wrong number or withdraw SMS permission. This prototype does not yet provide self-service data export or deletion. A live operator must publish contact details and procedures for access, correction, deletion and objection requests.</p><h2>Security and private links</h2><p>The prototype uses hashed passwords and sessions, tenant-scoped records, expiring private links and audit logs. A private link gives access to one customer account, so do not share it. Sika Ledger will never ask for your MoMo PIN, password or one-time code.</p><h2>Test services and live use</h2><p>Payments and messages are test-only unless an operator deliberately changes the integrations. Provider privacy terms apply when their services are enabled. Before live use, the business and operator must confirm a lawful basis, publish operator contact details and comply with Ghana’s Data Protection Act, 2012 (Act 843). This notice describes the prototype and is not legal advice.</p></article><p class="public-footer"><a href="/">Return to Sika Ledger</a></p></main>`;
+  app.innerHTML = `<main class="public-wrap privacy-wrap">${brand()}<article class="public-card privacy-card"><span class="eyebrow">Privacy notice</span><h1>How Sika Ledger handles information</h1><p class="subtle small">Last updated 27 October 2026</p><p>Sika Ledger helps businesses record customer debt, repayments and susu savings. The business that records your information is responsible for using it fairly and keeping it accurate.</p><h2>Information recorded</h2><ul><li>Business and staff account details.</li><li>Customer names, phone numbers, purchases, amounts, dates, repayment plans and savings records.</li><li>Payments, receipts, reminders, contact permission and disputes.</li></ul><h2>How it is used</h2><p>This information is used to maintain balances, prepare receipts, send permitted reminders, prevent duplicate payments and resolve customer concerns.</p><h2>Services used</h2><p>Paystack may handle online payments, Arkesel may send SMS reminders and Gemini may help prepare debt records. Information is shared with Gemini only after the user agrees. Payment details are entered on Paystack’s secure payment page.</p><h2>How long information is kept</h2><ul><li>Sign-in sessions expire after 12 hours.</li><li>Assistant conversation history is kept for 24 hours.</li><li>Private payment and contribution links expire after 30 days unless renewed.</li><li>Financial and activity records are kept until the service operator removes them.</li></ul><h2>Your choices</h2><p>Contact the business that sent you a private link to correct your details, dispute a balance, report a wrong number or withdraw SMS permission. The business can explain how to request access to or deletion of your information.</p><h2>Keeping your information safe</h2><p>Private links should not be shared. Sika Ledger will never ask for your mobile money PIN, password or one-time code.</p><h2>Legal responsibilities</h2><p>Businesses using Sika Ledger must provide appropriate contact details, follow a lawful retention policy and comply with Ghana’s Data Protection Act, 2012 (Act 843). This notice is not legal advice.</p></article><p class="public-footer"><a href="/">Return to Sika Ledger</a></p></main>`;
 }
 async function boot() {
   try {

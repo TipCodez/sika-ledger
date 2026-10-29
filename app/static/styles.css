@@ -1164,6 +1164,7 @@ code {
   overflow-wrap: anywhere;
 }
 .mono {
+  display: none;
   font-family: ui-monospace, monospace;
   font-size: 10px;
   overflow-wrap: anywhere;
