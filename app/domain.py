@@ -75,15 +75,16 @@ def owned_debt(conn, merchant, debt_id, lock=False):
 
 def customer_get_or_create(conn, merchant, name, number):
     number = phone(number)
+    name = ' '.join(name.strip().split())
     row = conn.execute(select(customers).where(customers.c.merchant_id == merchant,
                                               customers.c.phone == number)).mappings().first()
     if row:
-        if row['name'].casefold() != name.strip().casefold():
-            raise HTTPException(409, 'This phone number belongs to another saved customer name. Check the record.')
+        if ' '.join(row['name'].split()).casefold() != name.casefold():
+            raise HTTPException(409, 'This number belongs to another saved customer. Open that customer profile to record another debt.')
         return row['id']
     cid = uid()
     conn.execute(customers.insert().values(id=cid, merchant_id=merchant,
-        name=name.strip(), phone=number, do_not_contact=0))
+        name=name, phone=number, do_not_contact=0))
     return cid
 
 def create_debt(conn, merchant, data):

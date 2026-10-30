@@ -53,7 +53,7 @@ def test_invalid_initial_payment_rolls_back(client):
     assert client.get('/api/dashboard').json()['customers']==0
 
 def test_multiple_debts_per_customer_and_name_collision(client,debt):
-    r=client.post('/api/debts',json={'name':debt['name'],'phone':debt['phone'],
+    r=client.post('/api/debts',json={'name':'  '+debt['name'].replace(' ','   ')+'  ','phone':debt['phone'],
         'amount':'100','due_date':'2026-11-08'})
     assert r.status_code==201
     assert client.get('/api/dashboard').json()['customers']==1
