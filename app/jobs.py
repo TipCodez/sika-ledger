@@ -37,6 +37,18 @@ def eligible(debt):
         and not debt.get('plan_review_required',False) and not any(debt[k] for k in
             ('paused','disputed','do_not_contact')))
 
+def cancellation_reason(settings,debt,day_key):
+    if day_key!=today().isoformat():return 'This reminder was prepared for a different day. Prepare it again.'
+    if debt['balance_minor']<=0:return 'The debt no longer has an outstanding balance.'
+    if link_expired(debt.get('link_expires_at')):return 'The customer payment link has expired. Renew it before sending.'
+    if debt.get('plan_review_required',False):return 'The repayment plan needs review before a reminder can be sent.'
+    if debt['paused']:return 'Reminders are paused for this debt.'
+    if debt['disputed']:return 'The debt is disputed, so no reminder was sent.'
+    if debt['do_not_contact']:return 'The customer has opted out of reminders.'
+    if settings['sms_mode']!='dry_run' and not debt['sms_consent']:
+        return 'SMS permission is no longer valid for this customer number.'
+    return None
+
 async def process_webhooks(app, limit=10):
     engine=app.state.engine
     counts={'processed':0,'retry':0,'needs_review':0}
@@ -148,8 +160,9 @@ async def process_sms(app,limit=10):
             d=owned_debt(conn,job['merchant_id'],job['debt_id'],lock=True)
             conn.execute(select(customers).where(customers.c.id==d['customer_id']).with_for_update()).first()
             d=debt_view(conn,d)
-            if job['day_key']!=today().isoformat() or not eligible(d) or (settings['sms_mode']!='dry_run' and not d['sms_consent']):
-                result={'status':'cancelled','error':'Record became ineligible before dispatch.'}
+            reason=cancellation_reason(settings,d,job['day_key'])
+            if reason:
+                result={'status':'cancelled','error':reason}
             else:
                 business=conn.scalar(select(merchants.c.name).where(merchants.c.id==job['merchant_id']))
                 body=reminder_body(settings,business,d)

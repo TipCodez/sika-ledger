@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select, func
 from app import agent
 from app.db import (write, payments, webhook_inbox, outbox, sms_attempts,
-                    conversations, turns, proposals, meta)
+                    conversations, turns, proposals, meta, contact_preferences)
 from app.domain import uid, now, today
 from app.jobs import process_webhooks, process_sms, run_once, future
 from app.main import create_app
@@ -127,6 +127,23 @@ def test_dispute_after_queue_prevents_submission(client):
     client.post('/api/public/'+d['public_token']+'/dispute',json={'reason':'wrong_number','message':'This is the wrong person.'})
     assert asyncio.run(process_sms(client.app))['processed']==0
     assert client.get('/api/reminders').json()[0]['status']=='stale'
+
+def test_cancelled_pre_send_reminder_explains_reason_and_can_be_prepared_again(client):
+    d,preview=current_preview(client)
+    client.post('/api/reminders/'+preview['id']+'/queue')
+    with write(client.app.state.engine) as conn:
+        conn.execute(contact_preferences.update().where(
+            contact_preferences.c.customer_id==d['customer_id']).values(sms_consent=0))
+    client.app.state.settings.update(sms_mode='arkesel_live',arkesel_key='fake-live-key')
+    assert asyncio.run(process_sms(client.app))['processed']==1
+    attempt=client.get('/api/reminders').json()[0]['attempts'][0]
+    assert attempt['status']=='cancelled'
+    assert attempt['error']=='SMS permission is no longer valid for this customer number.'
+    assert client.post('/api/customers/'+d['customer_id']+'/contact',json={'expected_phone':d['phone'],
+        'phone':d['phone'],'sms_consent':True,'evidence':'Customer reconfirmed permission for this test',
+        'reason':'Restore permission after a cancelled pre-send reminder'}).status_code==200
+    assert client.post('/api/reminders/preview').json()['created']==1
+    assert client.get('/api/reminders').json()[0]['status']=='preview'
 
 def test_sms_submission_is_sandbox_only_and_records_acceptance_not_delivery(client,monkeypatch):
     d,preview=current_preview(client)

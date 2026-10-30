@@ -632,7 +632,7 @@ def create_app(database_url=None, overrides=None):
                 or d['do_not_contact'] or d['plan_review_required'] or link_expired(d['link_expires_at'])):continue
             day=current_day.isoformat()
             existing=conn.execute(select(outbox).where(outbox.c.debt_id==d['id'],outbox.c.day_key==day)).mappings().first()
-            if existing and existing['status']!='stale':continue
+            if existing and existing['status'] not in ('stale','cancelled'):continue
             business=conn.scalar(select(merchants.c.name).where(merchants.c.id==merchant))
             from .jobs import reminder_body
             body=reminder_body(settings,business,d)
