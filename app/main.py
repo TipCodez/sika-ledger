@@ -629,7 +629,8 @@ def create_app(database_url=None, overrides=None):
             days=(current_day-date.fromisoformat(d['collection_due_date'])).days
             eligible=days in (-1,0) or (days>0 and days%3==0)
             if (not eligible or d['balance_minor']==0 or d['paused'] or d['disputed']
-                or d['do_not_contact'] or d['plan_review_required'] or link_expired(d['link_expires_at'])):continue
+                or d['do_not_contact'] or d['plan_review_required'] or link_expired(d['link_expires_at'])
+                or (settings['sms_mode']!='dry_run' and not d['sms_consent'])):continue
             day=current_day.isoformat()
             existing=conn.execute(select(outbox).where(outbox.c.debt_id==d['id'],outbox.c.day_key==day)).mappings().first()
             if existing and existing['status'] not in ('stale','cancelled'):continue

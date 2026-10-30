@@ -139,6 +139,7 @@ def test_cancelled_pre_send_reminder_explains_reason_and_can_be_prepared_again(c
     attempt=client.get('/api/reminders').json()[0]['attempts'][0]
     assert attempt['status']=='cancelled'
     assert attempt['error']=='SMS permission is no longer valid for this customer number.'
+    assert client.post('/api/reminders/preview').json()['created']==0
     assert client.post('/api/customers/'+d['customer_id']+'/contact',json={'expected_phone':d['phone'],
         'phone':d['phone'],'sms_consent':True,'evidence':'Customer reconfirmed permission for this test',
         'reason':'Restore permission after a cancelled pre-send reminder'}).status_code==200
