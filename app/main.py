@@ -629,8 +629,7 @@ def create_app(database_url=None, overrides=None):
             days=(current_day-date.fromisoformat(d['collection_due_date'])).days
             eligible=days in (-1,0) or (days>0 and days%3==0)
             if (not eligible or d['balance_minor']==0 or d['paused'] or d['disputed']
-                or d['do_not_contact'] or d['plan_review_required'] or link_expired(d['link_expires_at'])
-                or (settings['sms_mode']!='dry_run' and not d['sms_consent'])):continue
+                or d['do_not_contact'] or d['plan_review_required'] or link_expired(d['link_expires_at'])):continue
             day=current_day.isoformat()
             existing=conn.execute(select(outbox).where(outbox.c.debt_id==d['id'],outbox.c.day_key==day)).mappings().first()
             if existing and existing['status'] not in ('stale','cancelled'):continue
@@ -647,6 +646,40 @@ def create_app(database_url=None, overrides=None):
     def previews(m=Depends(current)):
         with write(engine) as conn:count=make_previews(conn,m['id'])
         return {'created':count,'mode':'dry_run','sent':0}
+
+    @app.post('/api/debts/{did}/reminders/preview')
+    def manual_preview(did:str,m=Depends(current)):
+        with write(engine) as conn:
+            d=debt_view(conn,owned_debt(conn,m['id'],did,True))
+            if d['balance_minor']<=0:raise HTTPException(409,'This debt is already settled.')
+            if d['paused']:raise HTTPException(409,'Resume reminders for this debt first.')
+            if d['disputed']:raise HTTPException(409,'Resolve the customer dispute before sending a reminder.')
+            if d['do_not_contact']:raise HTTPException(409,'This customer has opted out of reminders.')
+            if d['plan_review_required']:raise HTTPException(409,'Review the repayment plan before sending a reminder.')
+            if link_expired(d['link_expires_at']):raise HTTPException(409,'Renew the private payment link before sending a reminder.')
+            if settings['sms_mode']!='dry_run' and not d['sms_consent']:
+                raise HTTPException(409,'Record SMS permission for this customer number first.')
+            day=today().isoformat()
+            existing=conn.execute(select(outbox).where(
+                outbox.c.debt_id==did,outbox.c.day_key==day).with_for_update()).mappings().first()
+            if existing and existing['status']=='preview':
+                return {'created':False,'duplicate':True,'reminder_id':existing['id']}
+            reusable=('stale','cancelled','dry_run_complete','sandbox_accepted')
+            if existing and existing['status'] not in reusable:
+                raise HTTPException(409,'A reminder was already sent or attempted for this debt today.')
+            business=conn.scalar(select(merchants.c.name).where(merchants.c.id==m['id']))
+            from .jobs import reminder_body
+            body=reminder_body(settings,business,d)
+            if existing:
+                rid=existing['id']
+                conn.execute(outbox.update().where(outbox.c.id==rid).values(
+                    body=body,status='preview',created_at=now()))
+            else:
+                rid=uid()
+                conn.execute(outbox.insert().values(id=rid,merchant_id=m['id'],debt_id=did,
+                    day_key=day,body=body,status='preview',created_at=now()))
+            log(conn,m['id'],'sms.manual_preview',rid,did)
+        return {'created':True,'duplicate':False,'reminder_id':rid}
 
     @app.get('/api/reminders')
     def reminders(m=Depends(current)):

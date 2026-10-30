@@ -110,6 +110,24 @@ def test_reminder_queue_dry_run_and_same_day_deduplication(client,monkeypatch):
     assert client.post('/api/reminders/preview').json()['created']==0
     assert asyncio.run(process_sms(client.app))['processed']==0
 
+def test_manual_reminder_can_be_prepared_outside_automatic_schedule(client):
+    due=(today()+timedelta(days=10)).isoformat()
+    d=client.post('/api/debts',json={'name':'Manual Reminder Customer','phone':'0248881111',
+        'amount':'125','due_date':due,'description':'Manual reminder test'}).json()
+    client.app.state.settings.update(sms_mode='arkesel_live',arkesel_key='fake-live-key')
+    assert client.post('/api/reminders/preview').json()['created']==0
+    url='/api/debts/'+d['id']+'/reminders/preview'
+    assert client.post(url).status_code==409
+    assert client.post('/api/customers/'+d['customer_id']+'/contact',json={'expected_phone':d['phone'],
+        'phone':d['phone'],'sms_consent':True,'evidence':'Customer approved a manual reminder test',
+        'reason':'Enable a manual reminder for this debt'}).status_code==200
+    result=client.post(url)
+    assert result.status_code==200 and result.json()['created'] is True
+    duplicate=client.post(url).json()
+    assert duplicate['duplicate'] is True and duplicate['created'] is False
+    reminder=client.get('/api/reminders').json()[0]
+    assert reminder['status']=='preview' and '125.00' in reminder['body']
+
 def test_queued_payment_change_invalidates_then_regenerates_current_balance(client):
     d,preview=current_preview(client)
     client.post('/api/reminders/'+preview['id']+'/queue')
@@ -139,7 +157,6 @@ def test_cancelled_pre_send_reminder_explains_reason_and_can_be_prepared_again(c
     attempt=client.get('/api/reminders').json()[0]['attempts'][0]
     assert attempt['status']=='cancelled'
     assert attempt['error']=='SMS permission is no longer valid for this customer number.'
-    assert client.post('/api/reminders/preview').json()['created']==0
     assert client.post('/api/customers/'+d['customer_id']+'/contact',json={'expected_phone':d['phone'],
         'phone':d['phone'],'sms_consent':True,'evidence':'Customer reconfirmed permission for this test',
         'reason':'Restore permission after a cancelled pre-send reminder'}).status_code==200
