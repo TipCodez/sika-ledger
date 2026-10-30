@@ -98,10 +98,17 @@ async def submit_sandbox(settings, number, body):
         if response.status_code >= 500:
             return {'status':'unknown','error':'Provider server error. Check provider history before retrying.'}
         if response.status_code >= 400:
-            return {'status':'failed','error':f'Provider rejected submission (HTTP {response.status_code}).'}
+            messages={
+                400:'The SMS provider rejected the sender name, message or phone number.',
+                401:'The SMS provider did not accept the API key.',
+                402:'The SMS account may not have enough credit.',
+                403:'The SMS provider did not authorize this sender name or API key.',
+                422:'The SMS provider rejected the sender name, message or phone number.'}
+            return {'status':'failed','error':messages.get(
+                response.status_code,'The SMS provider rejected the message.')}
         data=response.json()
         if data.get('status')!='success':
-            return {'status':'failed','error':'Provider did not accept the sandbox submission.'}
+            return {'status':'failed','error':'The SMS provider did not accept the message. Check the sender name, credit balance and phone number.'}
         rows=data.get('data')
         rows=rows if isinstance(rows,list) else [rows]
         identifier=next((str(r['id']) for r in rows if isinstance(r,dict) and r.get('id')),None)

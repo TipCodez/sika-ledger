@@ -139,6 +139,12 @@ def test_unknown_sms_id_and_unrecognized_status_do_not_change_reports(client,sms
     assert callback(client,sms,'INVENTED').json()['ignored']
     assert client.get('/api/integrations/sms-callbacks').json()==[]
 
+def test_live_sms_callback_is_accepted_for_reconciliation(client,sms):
+    with write(client.app.state.engine) as conn:
+        conn.execute(sms_attempts.update().where(
+            sms_attempts.c.id==sms['attempt_id']).values(mode='arkesel_live',status='live_accepted'))
+    assert callback(client,sms,'DELIVERED').json()['queued']
+
 def test_callback_terminal_status_cannot_regress(client,sms,monkeypatch):
     import app.sms_callbacks as callbacks
     actual={'status':'DELIVERED','recipient':sms['debt']['phone']}

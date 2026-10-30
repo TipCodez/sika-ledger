@@ -41,7 +41,7 @@ async def provider_status(settings,provider_id):
 
 def receive(conn,provider_id,status):
     attempt=conn.execute(select(sms_attempts).where(sms_attempts.c.provider_id==provider_id,
-        sms_attempts.c.mode=='arkesel_sandbox').with_for_update()).mappings().first()
+        sms_attempts.c.mode.in_(['arkesel_sandbox','arkesel_live'])).with_for_update()).mappings().first()
     if not attempt:return {'received':True,'ignored':True}
     if status not in STATUSES:return {'received':True,'ignored':True,'reason':'unsupported_status'}
     previous=conn.execute(select(sms_callback_inbox).where(

@@ -71,6 +71,22 @@ const fmtdate = (d) =>
   });
 const badge = (s) =>
   `<span class="status ${esc(s)}"><span class="dot"></span>${esc(s.replaceAll("_", " "))}</span>`;
+const smsAttemptText = (attempt) => {
+  if (attempt.delivery_report)
+    return `<strong>Delivery: ${esc(attempt.delivery_report.status.replaceAll("_", " "))}</strong>`;
+  if (attempt.error) return esc(attempt.error);
+  const labels = {
+    live_accepted: "Sent to SMS provider",
+    sandbox_accepted: "Saved for review",
+    dry_run_complete: "Reminder saved",
+    sending: "Sending",
+    queued: "Waiting to send",
+    cancelled: "Not sent",
+    unknown: "Delivery could not be confirmed",
+    failed: "Message was not accepted",
+  };
+  return esc(labels[attempt.status] || "Processing");
+};
 const brand = () =>
   '<div class="brand"><div class="brand-mark">s</div><span>sika<span>ledger</span></span></div>';
 function toast(text) {
@@ -403,7 +419,7 @@ async function renderPage() {
         "Prepare and send reminders around repayment dates.",
         '<button class="btn" id="preview-reminders">Prepare today’s previews</button>',
       ) +
-      `<p class="small subtle page-note">Messages are prepared only for customers who have granted SMS permission.</p><section class="panel">${rows.length ? rows.map((r) => `<article class="record-card"><div class="record-meta"><span>${fmtdate(r.created_at)}</span>${badge(r.status)}</div><p>${esc(r.body)}</p><span class="small subtle">${r.status === "stale" ? "Customer details changed. Prepare a new preview." : config.sms_mode === "arkesel_live" ? "Delivery updates appear here." : "Ready to review"}</span>${r.status === "preview" ? `<div class="section-gap"><button class="btn secondary tiny" data-queue-reminder="${r.id}">${config.sms_mode === "arkesel_live" ? "Send SMS" : "Save reminder"}</button></div>` : ""}${(r.attempts || []).map((a) => `<div class="small subtle section-gap">${a.delivery_report ? `<strong>Delivery: ${esc(a.delivery_report.status)}</strong>` : esc(a.status)}${a.error ? "<br>Could not send. Please try again." : ""}</div>`).join("")}</article>`).join("") : '<div class="empty"><h3>No reminders prepared yet</h3><p>Prepare today’s reminders to see eligible messages.</p></div>'}</section>`;
+      `<p class="small subtle page-note">Messages are prepared only for customers who have granted SMS permission.</p><section class="panel">${rows.length ? rows.map((r) => `<article class="record-card"><div class="record-meta"><span>${fmtdate(r.created_at)}</span>${badge(r.status)}</div><p>${esc(r.body)}</p><span class="small subtle">${r.status === "stale" ? "Customer details changed. Prepare a new preview." : config.sms_mode === "arkesel_live" ? "Delivery updates appear here." : "Ready to review"}</span>${r.status === "preview" ? `<div class="section-gap"><button class="btn secondary tiny" data-queue-reminder="${r.id}">${config.sms_mode === "arkesel_live" ? "Send SMS" : "Save reminder"}</button></div>` : ""}${(r.attempts || []).map((a) => `<div class="small subtle section-gap">${smsAttemptText(a)}</div>`).join("")}</article>`).join("") : '<div class="empty"><h3>No reminders prepared yet</h3><p>Prepare today’s reminders to see eligible messages.</p></div>'}</section>`;
     $$("[data-queue-reminder]").forEach(
       (b) =>
         (b.onclick = async () => {

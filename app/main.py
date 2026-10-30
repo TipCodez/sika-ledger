@@ -705,8 +705,8 @@ def create_app(database_url=None, overrides=None):
             from .jobs import eligible
             if row['day_key']!=today().isoformat() or not eligible(d):
                 raise HTTPException(409,'This reminder is no longer eligible. Refresh your previews.')
-            if settings['sms_mode']=='arkesel_sandbox' and not settings['arkesel_key']:
-                raise HTTPException(503,'Configure ARKESEL_API_KEY before queuing sandbox messages.')
+            if settings['sms_mode'] in ('arkesel_sandbox','arkesel_live') and not settings['arkesel_key']:
+                raise HTTPException(503,'SMS sending is not available. Ask the account owner to check the SMS service.')
             conn.execute(outbox.update().where(outbox.c.id==rid).values(status='queued'))
             log(conn,m['id'],'sms.queued',rid,settings['sms_mode'])
         return {'queued':True,'mode':settings['sms_mode'],'real_messages_sent':0}

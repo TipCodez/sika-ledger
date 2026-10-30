@@ -44,6 +44,21 @@ def test_live_sms_requires_approval_and_sends_without_sandbox_flag(tmp_path,monk
     assert captured["callback_url"]=="https://ledger.example/api/webhooks/arkesel"
 
 
+def test_live_sms_reports_an_actionable_provider_rejection(monkeypatch):
+    class FakeClient:
+        def __init__(self,**kwargs):pass
+        async def __aenter__(self):return self
+        async def __aexit__(self,*args):pass
+        async def post(self,*args,**kwargs):
+            return FakeResponse({"status":"error"},403)
+    monkeypatch.setattr(jobs.httpx,"AsyncClient",FakeClient)
+    result=asyncio.run(jobs.submit_sandbox({"arkesel_key":"key","sms_sender":"ApprovedName",
+        "sms_mode":"arkesel_live","arkesel_callbacks":False,
+        "base_url":"https://ledger.example"},"+233241234567","Test reminder"))
+    assert result["status"]=="failed"
+    assert "sender name or API key" in result["error"]
+
+
 def test_subaccount_setup_masks_account_number(client,monkeypatch):
     client.app.state.settings["paystack_key"]="sk_test_subaccount"
     captured={}

@@ -199,7 +199,7 @@ events, sync recent settlements, and reconcile every transaction in a settlement
 Ambiguous refund submissions are marked `unknown` for manual provider review and
 are never automatically submitted again.
 
-## Reminder processing and SMS sandbox
+## Reminder processing and SMS
 
 The new `.env.example` enables the embedded worker:
 
@@ -232,13 +232,29 @@ SMS_SENDER_ID=SikaLedger
 
 The adapter posts to Arkesel SMS API v2 with **sandbox fixed to true**. A successful
 response is recorded as `sandbox_accepted`. A separate sandbox status report can
-be reconciled using the optional callback path below. Real handset sending,
-billing confirmation and sender-ID approval are not part of this release.
-Approved live SMS uses `SMS_MODE=arkesel_live` and is rejected unless
+be reconciled using the optional callback path below. Approved live SMS uses
+`SMS_MODE=arkesel_live` and is rejected unless
 `ENABLE_LIVE_SMS=true`, `ARKESEL_SENDER_ID_APPROVED=true`, the API key, HTTPS
 public URL and secure cookies are all configured. Consent, quiet hours,
 last-second eligibility checks and the no-resend rule for unknown outcomes still
 apply. Provider acceptance is not treated as proof of handset delivery.
+
+For Render live delivery, use a live Arkesel key and the exact approved sender
+name:
+
+```dotenv
+SMS_MODE=arkesel_live
+ENABLE_LIVE_SMS=true
+ARKESEL_SENDER_ID_APPROVED=true
+ARKESEL_API_KEY=your_live_arkesel_key
+SMS_SENDER_ID=YourApprovedName
+RUN_BACKGROUND_WORKER=true
+PUBLIC_BASE_URL=https://your-service.onrender.com
+COOKIE_SECURE=true
+```
+
+The Arkesel account must also have SMS credit. `AUTOMATIC_REMINDERS` may remain
+`false` when reminders are sent manually from the app.
 
 Timeouts and ambiguous responses become `unknown`. Interrupted sends also become
 `unknown` after a recovery interval; neither case is automatically resent.
@@ -265,7 +281,7 @@ On a public HTTPS deployment, optionally add:
 ARKESEL_CALLBACKS_ENABLED=true
 ```
 
-New sandbox submissions attach this callback URL:
+New provider submissions attach this callback URL:
 
 ```text
 https://your-test-host.example/api/webhooks/arkesel
